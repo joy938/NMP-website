@@ -3,11 +3,11 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
-// নবজাগরণ একতা সংঘের ৫২ জন সদস্যের তালিকা
+// নবজাগরণ একতা সংঘের ৫১ জন সদস্যের সঠিক তালিকা
 const memberNames = [
   'প্রদ্যুত কান্তি দে', 'নিলয় সেন', 'নির্ণয় সেন', 'সৌরভ দে', 'বিপক দে', 
   'সুশান্ত দে', 'অনিক দে', 'জয় দে', 'বিশাল দে', 'অন্তু দে', 
-  'দীপ্ত দে', 'শেখর দে', 'রাসেল দে', 'মনু', 'দিপক দে', 
+  'দীপ্ত দে', 'শেখর দে', 'রাসেল দে (মনু)', 'দিপক দে', 
   'শঙ্কর দে', 'সজল দে', 'রনি সেন', 'বিপুল দে', 'মাইকেল দে', 
   'নয়ন দে', 'তরুণ দে', 'রাজীব দে', 'মিশু দে', 'বাবু দে', 
   'ঋতম দে', 'রকি কান্তি দে', 'সমর দে', 'অন্তর দে', 'সুব্রত দে', 
@@ -33,7 +33,7 @@ export default function SanghaPage() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinError, setPinError] = useState('');
 
-  // ৫২ জন সদস্যের ডিফল্ট তালিকা তৈরি
+  // ৫১ জন সদস্যের ডিফল্ট তালিকা
   const defaultMembers = memberNames.map((name, index) => ({
     id: index + 1,
     name: name,
@@ -45,7 +45,7 @@ export default function SanghaPage() {
   const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('sangha_members_v2');
+    const saved = localStorage.getItem('sangha_members_v3');
     if (saved) {
       try {
         setMembers(JSON.parse(saved));
@@ -57,7 +57,7 @@ export default function SanghaPage() {
 
   const saveMembers = (newMembers) => {
     setMembers(newMembers);
-    localStorage.setItem('sangha_members_v2', JSON.stringify(newMembers));
+    localStorage.setItem('sangha_members_v3', JSON.stringify(newMembers));
   };
 
   const handleAdminLogin = (e) => {
