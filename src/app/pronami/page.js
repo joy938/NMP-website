@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
-// ৪৬ জনের মূল তালিকা ও তাদের ধার্য টাকা
+// ৪৬ জনের মূল তালিকা
 const baseDonors = [
   { name: 'জিকু দে', pledged: 1000 },
   { name: 'নবীন সমিতি', pledged: 1000 },
@@ -62,12 +62,14 @@ export default function PronamiPage() {
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [selectedYear, setSelectedYear] = useState(2025);
 
+  // সার্চ স্টেট
+  const [searchQuery, setSearchQuery] = useState('');
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinError, setPinError] = useState('');
 
-  // ২০২৫ এ সবাই পরিশোধ করেছে (paid = pledged), ২০২৬ এ এখনো কেউ পরিশোধ করেনি (paid = 0)
   const defaultRecords = [
     ...baseDonors.map((d, idx) => ({
       id: `2025-${idx + 1}`,
@@ -75,7 +77,7 @@ export default function PronamiPage() {
       puja: 'কার্তিক পূজা',
       year: 2025,
       pledged: d.pledged,
-      paid: d.pledged, // ২০২৫ এ সবাই সম্পূর্ণ টাকা দিয়ে দিয়েছে
+      paid: d.pledged,
     })),
     ...baseDonors.map((d, idx) => ({
       id: `2026-${idx + 1}`,
@@ -83,7 +85,7 @@ export default function PronamiPage() {
       puja: 'কার্তিক পূজা',
       year: 2026,
       pledged: d.pledged,
-      paid: 0, // ২০২৬ এ এখনো কেউ দেয়নি (বকেয়া)
+      paid: 0,
     })),
   ];
 
@@ -177,13 +179,19 @@ export default function PronamiPage() {
     }
   };
 
-  const filteredRecords = records.filter(
+  // নির্বাচিত পূজা ও বছরের সম্পূর্ণ হিসাব
+  const allYearRecords = records.filter(
     (r) => r.puja === selectedPuja && r.year === selectedYear
   );
 
-  const totalPledged = filteredRecords.reduce((sum, r) => sum + r.pledged, 0);
-  const totalPaid = filteredRecords.reduce((sum, r) => sum + r.paid, 0);
+  const totalPledged = allYearRecords.reduce((sum, r) => sum + r.pledged, 0);
+  const totalPaid = allYearRecords.reduce((sum, r) => sum + r.paid, 0);
   const totalDue = totalPledged - totalPaid;
+
+  // সার্চ অনুযায়ী ফিল্টার করা তালিকা
+  const filteredRecords = allYearRecords.filter((r) =>
+    r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
@@ -233,12 +241,12 @@ export default function PronamiPage() {
         {/* মূল বক্স */}
         <div className="bg-white rounded-2xl shadow border border-gray-100 p-5">
           
-          {/* ফিল্টার */}
+          {/* ফিল্টার: পূজা ও বছর */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
             <div>
               <h2 className="text-lg font-bold text-gray-800">📋 প্রণামীর তালিকা</h2>
               <p className="text-xs text-gray-500">
-                {isAdmin ? 'আপনি অ্যাডমিন মোডে আছেন। যেকারো টাকা এডিট ও নতুন নাম যোগ করতে পারেন।' : 'সাধারণ দর্শন মোড। হিসাব পরিবর্তন করতে ওপরের অ্যাডমিন লগইন ব্যবহার করুন।'}
+                {isAdmin ? 'আপনি অ্যাডমিন মোডে আছেন। যেকারো টাকা এডিট ও নতুন নাম যোগ করতে পারেন।' : 'সাধারণ দর্শন মোড।'}
               </p>
             </div>
 
@@ -287,8 +295,8 @@ export default function PronamiPage() {
             </div>
           </div>
 
-          {/* নতুন নাম যোগ করার ফর্ম */}
-          {isAdmin ? (
+          {/* নতুন নাম যোগ করার ফর্ম (অ্যাডমিন) */}
+          {isAdmin && (
             <div className="mb-6">
               {!showAddForm ? (
                 <button
@@ -344,17 +352,30 @@ export default function PronamiPage() {
                 </form>
               )}
             </div>
-          ) : (
-            <div className="mb-4 text-xs text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 flex justify-between items-center">
-              <span>🔒 নতুন নাম বা টাকা যোগ করতে অ্যাডমিন লগইন করুন।</span>
-              <button
-                onClick={() => setShowPinModal(true)}
-                className="underline font-bold text-amber-900"
-              >
-                লগইন করুন
-              </button>
-            </div>
           )}
+
+          {/* 🔍 লাইভ সার্চ বার */}
+          <div className="relative mb-5">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
+                title="সার্চ ক্লিয়ার করুন"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           {/* তালিকা টেবিল */}
           <div className="overflow-x-auto">
@@ -374,7 +395,9 @@ export default function PronamiPage() {
                 {filteredRecords.length === 0 ? (
                   <tr>
                     <td colSpan={isAdmin ? 7 : 6} className="py-8 text-center text-gray-400 text-sm">
-                      {selectedPuja} ({selectedYear}) তে কোনো এন্ট্রি নেই।
+                      {searchQuery
+                        ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
+                        : `${selectedPuja} (${selectedYear}) তে কোনো এন্ট্রি নেই।`}
                     </td>
                   </tr>
                 ) : (
