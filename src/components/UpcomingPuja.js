@@ -5,7 +5,6 @@ import Link from 'next/link';
 export default function UpcomingPuja() {
   const ADMIN_PIN = '0000';
 
-  // ডিফল্ট আসন্ন পূজার তথ্য
   const defaultInfo = {
     title: 'শ্রী শ্রী কার্তিক পূজা',
     dateText: '১৭ নভেম্বর, ২০২৬',
@@ -16,6 +15,7 @@ export default function UpcomingPuja() {
 
   const [info, setInfo] = useState(defaultInfo);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [isFinished, setIsFinished] = useState(false);
   
   // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
@@ -30,7 +30,6 @@ export default function UpcomingPuja() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ব্রাউজার স্টোরেজ থেকে লোড
   useEffect(() => {
     const saved = localStorage.getItem('upcoming_puja_info');
     if (saved) {
@@ -42,11 +41,12 @@ export default function UpcomingPuja() {
     }
   }, []);
 
-  // লাইভ কাউন্টডাউন হিসাব
+  // লাইভ কাউন্টডাউন ও সময় পার হয়েছে কি না তা যাচাই
   useEffect(() => {
     const calculateTime = () => {
       const difference = +new Date(info.targetDate) - +new Date();
       if (difference > 0) {
+        setIsFinished(false);
         setTimeLeft({
           days: Math.floor(difference / (1000 * 60 * 60 * 24)),
           hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
@@ -54,6 +54,8 @@ export default function UpcomingPuja() {
           seconds: Math.floor((difference / 1000) % 60),
         });
       } else {
+        // সময় পার হয়ে গেলে উৎসব শেষ স্ট্যাটাস
+        setIsFinished(true);
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       }
     };
@@ -104,10 +106,14 @@ export default function UpcomingPuja() {
       {/* কার্ড কন্টেইনার */}
       <div className="bg-gradient-to-br from-amber-500/10 via-red-500/5 to-amber-500/10 border-2 border-amber-400 rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
         
-        {/* ছোট ডেকোরেশন ট্যাগ */}
+        {/* টপ ব্যাজ */}
         <div className="flex justify-between items-center mb-4">
-          <span className="bg-red-700 text-yellow-200 text-xs uppercase font-extrabold px-3 py-1 rounded-full shadow-sm">
-            ✨ আসন্ন মহাপূজা
+          <span className={`text-xs uppercase font-extrabold px-3 py-1 rounded-full shadow-sm ${
+            isFinished 
+              ? 'bg-amber-600 text-white' 
+              : 'bg-red-700 text-yellow-200'
+          }`}>
+            {isFinished ? '✨ পূজা সমাপন' : '✨ আসন্ন মহাপূজা'}
           </span>
 
           {/* অ্যাডমিন কন্ট্রোল */}
@@ -118,7 +124,7 @@ export default function UpcomingPuja() {
                   onClick={startEditing}
                   className="text-xs bg-amber-600 text-white px-3 py-1 rounded-full font-semibold hover:bg-amber-700"
                 >
-                  ✏️ তথ্য এডিট
+                  ✏️ পরবর্তী পূজা সেট করুন
                 </button>
                 <button
                   onClick={() => setIsAdmin(false)}
@@ -141,18 +147,18 @@ export default function UpcomingPuja() {
         {/* এডিট ফর্ম (যদি অ্যাডমিন এডিটে ক্লিক করে) */}
         {isEditing ? (
           <form onSubmit={handleSaveInfo} className="bg-white p-5 rounded-2xl border border-amber-300 space-y-3 mb-4">
-            <h4 className="font-bold text-sm text-gray-800">আসন্ন পূজার তথ্য পরিবর্তন করুন:</h4>
+            <h4 className="font-bold text-sm text-gray-800">পূজার তথ্য বা পরবর্তী পূজা নির্ধারণ করুন:</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
                 type="text"
-                placeholder="পূজার নাম"
+                placeholder="পূজার নাম (যেমন: শ্রী শ্রী সরস্বতী পূজা)"
                 value={editTitle}
                 onChange={(e) => setEditTitle(e.target.value)}
                 className="p-2 text-xs border rounded outline-none"
               />
               <input
                 type="text"
-                placeholder="তারিখ (বাংলায়)"
+                placeholder="তারিখ (যেমন: ২৫ জানুয়ারি, ২০২৭)"
                 value={editDateText}
                 onChange={(e) => setEditDateText(e.target.value)}
                 className="p-2 text-xs border rounded outline-none"
@@ -194,7 +200,7 @@ export default function UpcomingPuja() {
             </div>
           </form>
         ) : (
-          /* সাধারণ আমন্ত্রণ ভিউ */
+          /* সাধারণ ভিউ */
           <div className="text-center">
             <h2 className="text-3xl md:text-5xl font-black text-red-800 tracking-tight">
               {info.title}
@@ -208,33 +214,45 @@ export default function UpcomingPuja() {
               "{info.notice}"
             </p>
 
-            {/* লাইভ কাউন্টডাউন টাইমার */}
-            <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto my-7">
-              <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
-                <span className="text-2xl md:text-4xl font-black text-red-700 block">
-                  {timeLeft.days}
-                </span>
-                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">দিন</span>
+            {/* যদি সময় শেষ হয়ে যায় তাহলে উৎসবের শুভেচ্ছা বার্তা, নয়তো লাইভ টাইমার */}
+            {isFinished ? (
+              <div className="bg-amber-100/80 border border-amber-300 rounded-2xl p-5 max-w-lg mx-auto my-6 text-center shadow-inner">
+                <span className="text-3xl block mb-1">🎉</span>
+                <h3 className="font-bold text-red-800 text-base md:text-lg">
+                  {info.title} সফলভাবে সম্পন্ন হয়েছে!
+                </h3>
+                <p className="text-xs md:text-sm text-amber-900 mt-1 font-medium">
+                  সকল পাড়াবাসী ও ভক্তবৃন্দকে জানাই আন্তরিক প্রীতি ও শুভেচ্ছা। পরবর্তী পূজার দিনক্ষণ ও সময়সূচী শীঘ্রই জানানো হবে।
+                </p>
               </div>
-              <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
-                <span className="text-2xl md:text-4xl font-black text-red-700 block">
-                  {timeLeft.hours}
-                </span>
-                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">ঘণ্টা</span>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto my-7">
+                <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
+                  <span className="text-2xl md:text-4xl font-black text-red-700 block">
+                    {timeLeft.days}
+                  </span>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">দিন</span>
+                </div>
+                <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
+                  <span className="text-2xl md:text-4xl font-black text-red-700 block">
+                    {timeLeft.hours}
+                  </span>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">ঘণ্টা</span>
+                </div>
+                <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
+                  <span className="text-2xl md:text-4xl font-black text-red-700 block">
+                    {timeLeft.minutes}
+                  </span>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">মিনিট</span>
+                </div>
+                <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
+                  <span className="text-2xl md:text-4xl font-black text-amber-600 block">
+                    {timeLeft.seconds}
+                  </span>
+                  <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">সেকেন্ড</span>
+                </div>
               </div>
-              <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
-                <span className="text-2xl md:text-4xl font-black text-red-700 block">
-                  {timeLeft.minutes}
-                </span>
-                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">মিনিট</span>
-              </div>
-              <div className="bg-white/90 border border-amber-200 rounded-2xl p-2.5 md:p-3 shadow-md">
-                <span className="text-2xl md:text-4xl font-black text-amber-600 block">
-                  {timeLeft.seconds}
-                </span>
-                <span className="text-[10px] md:text-xs text-gray-500 font-bold uppercase">সেকেন্ড</span>
-              </div>
-            </div>
+            )}
 
             {/* শর্টকাট বোতামসমূহ */}
             <div className="flex flex-wrap justify-center gap-3 mt-4">
@@ -261,7 +279,7 @@ export default function UpcomingPuja() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-gray-800 mb-1">অ্যাডমিন প্রবেশ</h3>
-            <p className="text-xs text-gray-500 mb-4">আসন্ন পূজা এডিট করতে ৪ ডিজিটের পিন লিখুন।</p>
+            <p className="text-xs text-gray-500 mb-4">পরবর্তী পূজা নির্ধারণ করতে ৪ ডিজিটের পিন লিখুন।</p>
             
             <form onSubmit={handleAdminLogin}>
               <input
