@@ -6,79 +6,67 @@ import Navbar from '../../components/Navbar';
 export default function SchedulePage() {
   const ADMIN_PIN = '0000';
 
+  // তোমার সময়সূচীর গুগল শিট লিংক
+  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/gviz/tq?tqx=out:csv';
+  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/edit?usp=sharing';
+
   const pujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
-  const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডিফল্ট সময়সূচী ডাটা
-  const defaultScheduleData = {
-    'কার্তিক পূজা': [
-      { id: 1, event: 'শুভ অধিবাস ও ঘট স্থাপন', time: 'সন্ধ্যা ৬:৩০ মি.', date: 'পূজার পূর্ববর্তী দিন' },
-      { id: 2, event: 'পূজারম্ভ ও চণ্ডীপাঠ', time: 'সকাল ৯:০০ টা', date: 'পূজার দিন' },
-      { id: 3, event: 'পুষ্পাঞ্জলি প্রদান', time: 'সকাল ১১:৩০ মি.', date: 'পূজার দিন' },
-      { id: 4, event: 'মহাপ্রসাদ বিতরণ', time: 'দুপুর ১:৩০ মি.', date: 'পূজার দিন' },
-      { id: 5, event: 'সন্ধ্যা আরতি ও সাংস্কৃতিক অনুষ্ঠান', time: 'সন্ধ্যা ৭:০০ টা', date: 'পূজার দিন' },
-      { id: 6, event: 'প্রতিমা বিসর্জন ও শোভাযাত্রা', time: 'বিকেল ৪:০০ টা', date: 'পরবর্তী দিন' },
-    ],
-    'সরস্বতী পূজা': [
-      { id: 1, event: 'বাণী বন্দনা ও পূজা আরম্ভ', time: 'সকাল ৮:০০ টা', date: 'শ্রীপঞ্চমী তিথি' },
-      { id: 2, event: 'পুষ্পাঞ্জলি প্রদান (প্রথম পর্ব)', time: 'সকাল ১০:০০ টা', date: 'শ্রীপঞ্চমী তিথি' },
-      { id: 3, event: 'শিশুদের হাতেখড়ি অনুষ্ঠান', time: 'সকাল ১১:০০ টা', date: 'শ্রীপঞ্চমী তিথি' },
-      { id: 4, event: 'ফল ও খিচুড়ি প্রসাদ বিতরণ', time: 'দুপুর ১:০০ টা', date: 'শ্রীপঞ্চমী তিথি' },
-      { id: 5, event: 'সন্ধ্যা আরতি ও প্রসাদ বিতরণ', time: 'সন্ধ্যা ৬:৩০ মি.', date: 'শ্রীপঞ্চমী তিথি' },
-    ],
-    'বাসন্তী পূজা': [
-      { id: 1, event: 'শ্রীশ্রী বাসন্তী দেবীর বোধন ও অধিবাস', time: 'সন্ধ্যা ৬:০০ টা', date: 'ষষ্ঠী তিথি' },
-      { id: 2, event: 'মহাসপ্তমী বিহিত পূজা ও অঞ্জলি', time: 'সকাল ৯:৩০ মি.', date: 'সপ্তমী তিথি' },
-      { id: 3, event: 'মহাষ্টমী পূজা ও কুমারী পূজা', time: 'সকাল ১০:০০ টা', date: 'অষ্টমী তিথি' },
-      { id: 4, event: 'সন্ধিপূজা সমাপন', time: 'তিথির নির্ধারিত সময়ে', date: 'অষ্টমী-নবমী সন্ধিক্ষণ' },
-      { id: 5, event: 'মহানবমী পূজা ও মহাপ্রসাদ', time: 'দুপুর ১২:৩০ মি.', date: 'নবমী তিথি' },
-      { id: 6, event: 'বিজয়া দশমী ও প্রতিমা বিসর্জন', time: 'বিকেল ৪:৩০ মি.', date: 'দশমী তিথি' },
-    ],
-    'কীর্তন': [
-      { id: 1, event: 'শুভ অধিবাস', time: 'সন্ধ্যা ৭:০০ টা', date: 'অধিবাস রজনী' },
-      { id: 2, event: 'অষ্টপ্রহরব্যাপী হরিনাম সংকীর্তন আরম্ভ', time: 'ভোর ৫:০০ টা', date: 'প্রথম দিন' },
-      { id: 3, event: 'মধ্যাহ্ন ভোগারতি ও মহাপ্রসাদ', time: 'দুপুর ১:০০ টা', date: 'প্রতিদিন' },
-      { id: 4, event: 'সন্ধ্যা আরতি ও নামসুধা পরিবেশন', time: 'সন্ধ্যা ৬:৩০ মি.', date: 'প্রতিদিন' },
-      { id: 5, event: 'কুঞ্জভঙ্গ ও দধিভাণ্ড ভঞ্জন', time: 'দুপুর ১২:০০ টা', date: 'সমাপনী দিন' },
-      { id: 6, event: 'শান্তিজল গ্রহণ ও বিদায় পর্ব', time: 'দুপুর ২:০০ টা', date: 'সমাপনী দিন' },
-    ],
+  // ডাটা ও লোডিং স্টেট
+  const [schedules, setSchedules] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+
+  // গুগল শিট থেকে সময়সূচী ডাটা লোড
+  const fetchScheduleData = async () => {
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const response = await fetch(GOOGLE_SHEET_CSV_URL);
+      const csvText = await response.text();
+
+      const lines = csvText.trim().split(/\r?\n/);
+      const parsedSchedules = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
+          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+        );
+
+        if (cols.length >= 4 && cols[0]) {
+          parsedSchedules.push({
+            id: i,
+            event: cols[0],
+            date: cols[1] || 'নির্ধারিত দিন',
+            time: cols[2] || 'নির্ধারিত সময়',
+            puja: cols[3] || 'কার্তিক পূজা',
+          });
+        }
+      }
+
+      setSchedules(parsedSchedules);
+    } catch (error) {
+      console.error('সময়সূচী লোড করতে সমস্যা হয়েছে:', error);
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
-
-  const [schedules, setSchedules] = useState(defaultScheduleData);
-
-  // এডিট স্টেট
-  const [editingId, setEditingId] = useState(null);
-  const [editEvent, setEditEvent] = useState('');
-  const [editDate, setEditDate] = useState('');
-  const [editTime, setEditTime] = useState('');
-
-  // নতুন আইটেম যোগ করার ফর্ম স্টেট
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newEvent, setNewEvent] = useState('');
-  const [newDate, setNewDate] = useState('');
-  const [newTime, setNewTime] = useState('');
 
   useEffect(() => {
-    const saved = localStorage.getItem('puja_schedule_data');
-    if (saved) {
-      try {
-        setSchedules(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    fetchScheduleData();
   }, []);
-
-  const saveSchedules = (newSchedules) => {
-    setSchedules(newSchedules);
-    localStorage.setItem('puja_schedule_data', JSON.stringify(newSchedules));
-  };
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
@@ -88,71 +76,19 @@ export default function SchedulePage() {
       setPinInput('');
       setPinError('');
     } else {
-      setPinError('ভুল পিন কোড! আবার চেষ্টা করুন।');
+      setPinError('ভুল পিন কোড!');
     }
   };
 
-  // এডিট শুরু
-  const startEditing = (item) => {
-    setEditingId(item.id);
-    setEditEvent(item.event);
-    setEditDate(item.date);
-    setEditTime(item.time);
-  };
+  // নির্বাচিত পূজা অনুযায়ী ফিল্টার
+  const currentPujaSchedules = schedules.filter((item) => item.puja === selectedPuja);
 
-  // এডিট সেভ
-  const handleSaveEdit = (id) => {
-    const currentList = schedules[selectedPuja] || [];
-    const updatedList = currentList.map((item) => {
-      if (item.id === id) {
-        return {
-          ...item,
-          event: editEvent,
-          date: editDate,
-          time: editTime,
-        };
-      }
-      return item;
-    });
-
-    const updatedSchedules = { ...schedules, [selectedPuja]: updatedList };
-    saveSchedules(updatedSchedules);
-    setEditingId(null);
-  };
-
-  // আইটেম মুছে ফেলা
-  const handleDeleteItem = (id) => {
-    if (!isAdmin) return;
-    if (confirm('আপনি কি এই সময়সূচীটি মুছে ফেলতে চান?')) {
-      const currentList = schedules[selectedPuja] || [];
-      const updatedList = currentList.filter((item) => item.id !== id);
-      const updatedSchedules = { ...schedules, [selectedPuja]: updatedList };
-      saveSchedules(updatedSchedules);
-    }
-  };
-
-  // নতুন সময়সূচী যোগ
-  const handleAddNewItem = (e) => {
-    e.preventDefault();
-    if (!newEvent.trim()) return;
-
-    const currentList = schedules[selectedPuja] || [];
-    const newItem = {
-      id: Date.now(),
-      event: newEvent.trim(),
-      date: newDate.trim() || 'নির্ধারিত দিন',
-      time: newTime.trim() || 'নির্ধারিত সময়',
-    };
-
-    const updatedSchedules = { ...schedules, [selectedPuja]: [...currentList, newItem] };
-    saveSchedules(updatedSchedules);
-    setNewEvent('');
-    setNewDate('');
-    setNewTime('');
-    setShowAddForm(false);
-  };
-
-  const currentSchedule = schedules[selectedPuja] || [];
+  // সার্চ ফিল্টার
+  const filteredSchedules = currentPujaSchedules.filter((item) =>
+    item.event.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+    item.date.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+    item.time.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
@@ -166,15 +102,21 @@ export default function SchedulePage() {
             ← হোমে ফিরে যান
           </Link>
 
-          <div>
+          <div className="flex items-center gap-2">
+            {/* অ্যাডমিন এডিট বাটন */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
-                <span className="bg-green-100 text-green-700 text-xs px-3 py-1 rounded-full font-bold">
-                  🔓 অ্যাডমিন মোড চালু
-                </span>
+                <a
+                  href={GOOGLE_SHEET_EDIT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  <span>📊</span> শিটে সময় এডিট করুন
+                </a>
                 <button
                   onClick={() => setIsAdmin(false)}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full font-medium"
+                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
                 >
                   লগআউট
                 </button>
@@ -182,20 +124,35 @@ export default function SchedulePage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3.5 py-1.5 rounded-full font-semibold transition"
+                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3.5 py-1.5 rounded-full font-semibold transition"
               >
-                🔒 অ্যাডমিন লগইন
+                🔒 অ্যাডমিন
               </button>
             )}
+
+            {/* রিফ্রেশ বাটন */}
+            <button
+              onClick={fetchScheduleData}
+              disabled={isLoading}
+              title="নতুন সময়সূচী লোড করতে ক্লিক করুন"
+              className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+            >
+              <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
+            </button>
           </div>
         </div>
 
         {/* হেডার ব্যানার */}
         <div className="bg-gradient-to-r from-red-700 to-amber-600 text-white p-6 rounded-2xl shadow-md mb-8">
-          <span className="bg-white/20 text-yellow-100 text-xs px-2.5 py-1 rounded font-bold">পূজার নির্ঘণ্ট</span>
+          <div className="flex items-center gap-2">
+            <span className="bg-white/20 text-yellow-100 text-xs px-2.5 py-1 rounded font-bold">পূজার নির্ঘণ্ট</span>
+            <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+            </span>
+          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার সময়সূচী ও কার্যক্রম</h1>
           <p className="text-red-100 text-sm mt-2">
-            নবীন মহাজন পাড়ার সকল পূজা ও ধর্মীয় অনুষ্ঠানের দিন, তিথি ও অঞ্জলির সময়।
+            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ সময়সূচী দেখানো হচ্ছে।
           </p>
         </div>
 
@@ -217,7 +174,7 @@ export default function SchedulePage() {
             return (
               <button
                 key={puja}
-                onClick={() => { setSelectedPuja(puja); setEditingId(null); }}
+                onClick={() => setSelectedPuja(puja)}
                 className={`px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm ${
                   isActive
                     ? 'bg-red-700 text-white shadow-md'
@@ -232,171 +189,77 @@ export default function SchedulePage() {
 
         {/* মূল বক্স */}
         <div className="bg-white rounded-2xl shadow border border-gray-100 p-5 md:p-6">
-          <div className="border-b pb-3 mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                <span>📅</span> {selectedPuja}র সময়সূচী
-              </h2>
-              <p className="text-xs text-gray-500">
-                {isAdmin ? 'আপনি অ্যাডমিন মোডে আছেন। যেকোনো সময় ও কার্যক্রম এডিট করতে পারবেন।' : 'সাধারণ দর্শন মোড।'}
-              </p>
-            </div>
-            
-            {isAdmin && (
+          <div className="border-b pb-3 mb-5 flex justify-between items-center">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <span>📅</span> {selectedPuja}র সময়সূচী
+            </h2>
+            <span className="text-xs bg-red-100 text-red-700 font-semibold px-2.5 py-1 rounded-full">
+              {currentPujaSchedules.length} টি কার্যক্রম
+            </span>
+          </div>
+
+          {/* 🔍 সার্চ বার */}
+          <div className="relative mb-5">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="কার্যক্রম বা সময় দিয়ে খুঁজুন (যেমন: অঞ্জলি, আরতি, সকাল)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
+            />
+            {searchQuery && (
               <button
-                onClick={() => setShowAddForm(true)}
-                className="bg-red-700 hover:bg-red-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
               >
-                + নতুন কার্যক্রম যোগ
+                ✕
               </button>
             )}
           </div>
 
-          {/* নতুন কার্যক্রম যোগ করার ফর্ম (অ্যাডমিন) */}
-          {isAdmin && showAddForm && (
-            <form onSubmit={handleAddNewItem} className="bg-red-50 border border-red-200 p-4 rounded-xl mb-5 space-y-2">
-              <div className="text-xs font-bold text-red-800 mb-1">
-                {selectedPuja}তে নতুন কার্যক্রম যোগ করুন:
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input
-                  type="text"
-                  placeholder="কার্যক্রমের নাম (যেমন: পুষ্পাঞ্জলি)..."
-                  value={newEvent}
-                  onChange={(e) => setNewEvent(e.target.value)}
-                  className="p-2 text-xs border border-gray-300 rounded-lg outline-none bg-white"
-                  autoFocus
-                />
-                <input
-                  type="text"
-                  placeholder="দিন / তিথি (যেমন: পূজার দিন)..."
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  className="p-2 text-xs border border-gray-300 rounded-lg outline-none bg-white"
-                />
-                <input
-                  type="text"
-                  placeholder="সময় (যেমন: সকাল ১০:০০ টা)..."
-                  value={newTime}
-                  onChange={(e) => setNewTime(e.target.value)}
-                  className="p-2 text-xs border border-gray-300 rounded-lg outline-none bg-white"
-                />
-              </div>
-              <div className="flex gap-2 justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAddForm(false)}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-3 py-1.5 rounded-lg"
-                >
-                  বাতিল
-                </button>
-                <button
-                  type="submit"
-                  className="bg-red-700 hover:bg-red-800 text-white text-xs px-4 py-1.5 rounded-lg font-medium"
-                >
-                  যোগ করুন
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* সময়সূচী লিস্ট */}
+          {/* সময়সূচী কার্ড লিস্ট */}
           <div className="space-y-3">
-            {currentSchedule.length === 0 ? (
+            {isLoading ? (
+              <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
+                <span className="text-2xl animate-spin">⏳</span>
+                <span>গুগল শিট থেকে সময়সূচী লোড হচ্ছে...</span>
+              </div>
+            ) : isError ? (
+              <div className="py-8 text-center text-red-600 text-sm">
+                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+              </div>
+            ) : filteredSchedules.length === 0 ? (
               <div className="py-8 text-center text-gray-400 text-sm">
-                এই পূজায় কোনো সময়সূচী যুক্ত করা নেই।
+                {searchQuery
+                  ? `"${searchQuery}" এর সাথে কোনো কার্যক্রম মিলছে না।`
+                  : `${selectedPuja}র জন্য গুগল শিটে কোনো কার্যক্রম যুক্ত নেই।`}
               </div>
             ) : (
-              currentSchedule.map((item, index) => {
-                const isEditing = editingId === item.id;
-
-                return (
-                  <div
-                    key={item.id}
-                    className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 bg-gray-50 hover:bg-amber-50/50 rounded-xl border border-gray-200/70 transition gap-3"
-                  >
-                    {isEditing ? (
-                      /* এডিট মোড */
-                      <div className="w-full flex flex-col sm:flex-row gap-2 items-center">
-                        <input
-                          type="text"
-                          value={editEvent}
-                          onChange={(e) => setEditEvent(e.target.value)}
-                          className="w-full sm:flex-1 p-1.5 text-xs border border-red-500 rounded outline-none font-bold bg-white"
-                          placeholder="কার্যক্রমের নাম"
-                          autoFocus
-                        />
-                        <input
-                          type="text"
-                          value={editDate}
-                          onChange={(e) => setEditDate(e.target.value)}
-                          className="w-full sm:w-36 p-1.5 text-xs border border-gray-300 rounded outline-none bg-white"
-                          placeholder="দিন / তিথি"
-                        />
-                        <input
-                          type="text"
-                          value={editTime}
-                          onChange={(e) => setEditTime(e.target.value)}
-                          className="w-full sm:w-36 p-1.5 text-xs border border-gray-300 rounded outline-none bg-white font-semibold"
-                          placeholder="সময়"
-                        />
-                        <div className="flex gap-1 justify-end w-full sm:w-auto">
-                          <button
-                            onClick={() => handleSaveEdit(item.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3 py-1.5 rounded shadow-sm"
-                          >
-                            ✓ সেভ
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-2.5 py-1.5 rounded"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* সাধারণ প্রদর্শন মোড */
-                      <>
-                        <div className="flex items-center gap-3">
-                          <span className="w-7 h-7 flex items-center justify-center bg-red-100 text-red-700 font-bold rounded-full text-xs shrink-0">
-                            {index + 1}
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-sm md:text-base text-gray-800">{item.event}</h4>
-                            <span className="text-xs text-gray-500">{item.date}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 sm:self-center self-end">
-                          <span className="bg-white border border-red-200 text-red-700 font-semibold text-xs px-3 py-1.5 rounded-lg shadow-2xs">
-                            ⏰ {item.time}
-                          </span>
-
-                          {isAdmin && (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => startEditing(item)}
-                                className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-1.5 py-1 rounded hover:bg-blue-50"
-                                title="এডিট করুন"
-                              >
-                                ✏️ এডিট
-                              </button>
-                              <button
-                                onClick={() => handleDeleteItem(item.id)}
-                                className="text-xs text-red-500 hover:text-red-700 px-1.5 py-1 rounded hover:bg-red-50"
-                                title="মুছে ফেলুন"
-                              >
-                                🗑️
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
+              filteredSchedules.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 bg-gray-50 hover:bg-amber-50/50 rounded-xl border border-gray-200/70 transition gap-2"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-7 h-7 flex items-center justify-center bg-red-100 text-red-700 font-bold rounded-full text-xs shrink-0">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-sm md:text-base text-gray-800">{item.event}</h4>
+                      <span className="text-xs text-gray-500">{item.date}</span>
+                    </div>
                   </div>
-                );
-              })
+
+                  <div className="sm:self-center self-end">
+                    <span className="inline-block bg-white border border-red-200 text-red-700 font-semibold text-xs px-3 py-1.5 rounded-lg shadow-2xs">
+                      ⏰ {item.time}
+                    </span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
@@ -409,7 +272,7 @@ export default function SchedulePage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-gray-800 mb-1">অ্যাডমিন প্রবেশ</h3>
-            <p className="text-xs text-gray-500 mb-4">সময়সূচী পরিবর্তন করতে ৪ ডিজিটের পিন লিখুন।</p>
+            <p className="text-xs text-gray-500 mb-4">গুগল শিট খুলতে ৪ ডিজিটের পিন লিখুন।</p>
             
             <form onSubmit={handleAdminLogin}>
               <input
