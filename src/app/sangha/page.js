@@ -3,62 +3,73 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
-// নবজাগরণ একতা সংঘের ৫১ জন সদস্যের সঠিক তালিকা
-const memberNames = [
-  'প্রদ্যুত কান্তি দে', 'নিলয় সেন', 'নির্ণয় সেন', 'সৌরভ দে', 'বিপক দে', 
-  'সুশান্ত দে', 'অনিক দে', 'জয় দে', 'বিশাল দে', 'অন্তু দে', 
-  'দীপ্ত দে', 'শেখর দে', 'রাসেল দে (মনু)', 'দিপক দে', 
-  'শঙ্কর দে', 'সজল দে', 'রনি সেন', 'বিপুল দে', 'মাইকেল দে', 
-  'নয়ন দে', 'তরুণ দে', 'রাজীব দে', 'মিশু দে', 'বাবু দে', 
-  'ঋতম দে', 'রকি কান্তি দে', 'সমর দে', 'অন্তর দে', 'সুব্রত দে', 
-  'রিশু কান্তি দে', 'প্রবাল দে', 'সতীর্থ সেন', 'পল্লব দে', 'অরুপ দে', 
-  'অজয় দে', 'সৈকত সেন', 'পবন দে', 'ইমন শীল', 'রিপন কান্তি দে', 
-  'নয়ন সেন', 'প্রবীর কান্তি দে', 'নোবেল দে', 'মিন্টু দে', 'হৃদয় দে', 
-  'শুভ দে', 'শাপলা দে', 'রঞ্জন দে', 'নীলকমল দে', 'নিপ্পন দে', 
-  'দুর্জয় সেন', 'রুবেল কান্তি দে'
-];
-
 export default function SanghaPage() {
   const ADMIN_PIN = '0000';
+  
+  // তোমার মাসিক চাঁদার গুগল শিট লিংক
+  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/gviz/tq?tqx=out:csv';
+  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/edit?usp=sharing';
 
   const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
 
   const [selectedMonth, setSelectedMonth] = useState('নভেম্বর');
   const [selectedYear, setSelectedYear] = useState(2026);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
-  const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ৫১ জন সদস্যের ডিফল্ট তালিকা
-  const defaultMembers = memberNames.map((name, index) => ({
-    id: index + 1,
-    name: name,
-    paidRecords: [],
-  }));
+  // ডাটা ও লোডিং স্টেট
+  const [records, setRecords] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
 
-  const [members, setMembers] = useState(defaultMembers);
-  const [newMemberName, setNewMemberName] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  // গুগল শিট থেকে ডাটা লোড
+  const fetchGoogleSheetData = async () => {
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const response = await fetch(GOOGLE_SHEET_CSV_URL);
+      const csvText = await response.text();
+
+      const lines = csvText.trim().split(/\r?\n/);
+      const parsedRecords = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
+          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+        );
+
+        if (cols.length >= 4 && cols[0]) {
+          parsedRecords.push({
+            id: i,
+            name: cols[0],
+            month: cols[1] || 'নভেম্বর',
+            year: Number(cols[2]) || 2026,
+            status: cols[3] || 'বকেয়া',
+          });
+        }
+      }
+
+      setRecords(parsedRecords);
+    } catch (error) {
+      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const saved = localStorage.getItem('sangha_members_v3');
-    if (saved) {
-      try {
-        setMembers(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    fetchGoogleSheetData();
   }, []);
-
-  const saveMembers = (newMembers) => {
-    setMembers(newMembers);
-    localStorage.setItem('sangha_members_v3', JSON.stringify(newMembers));
-  };
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
@@ -68,49 +79,22 @@ export default function SanghaPage() {
       setPinInput('');
       setPinError('');
     } else {
-      setPinError('ভুল পিন কোড! আবার চেষ্টা করুন।');
+      setPinError('ভুল পিন কোড!');
     }
   };
 
-  const handleAddMember = (e) => {
-    e.preventDefault();
-    if (!newMemberName.trim()) return;
+  // নির্বাচিত মাস ও বছরের রেকর্ড
+  const currentMonthRecords = records.filter(
+    (r) => r.month === selectedMonth && Number(r.year) === Number(selectedYear)
+  );
 
-    const newMember = {
-      id: Date.now(),
-      name: newMemberName.trim(),
-      paidRecords: [],
-    };
+  const paidCount = currentMonthRecords.filter((r) => r.status.includes('পরিশোধিত')).length;
+  const dueCount = currentMonthRecords.length - paidCount;
 
-    const updated = [...members, newMember];
-    saveMembers(updated);
-    setNewMemberName('');
-    setShowAddForm(false);
-  };
-
-  const togglePayment = (memberId) => {
-    if (!isAdmin) {
-      alert('এটি পরিবর্তন করার ক্ষমতা শুধুমাত্র অ্যাডমিনের আছে। আগে লগইন করুন!');
-      return;
-    }
-
-    const currentKey = `${selectedMonth}-${selectedYear}`;
-    const updated = members.map((m) => {
-      if (m.id === memberId) {
-        const isPaid = m.paidRecords.includes(currentKey);
-        const newPaidRecords = isPaid
-          ? m.paidRecords.filter((k) => k !== currentKey)
-          : [...m.paidRecords, currentKey];
-        return { ...m, paidRecords: newPaidRecords };
-      }
-      return m;
-    });
-    saveMembers(updated);
-  };
-
-  const currentKey = `${selectedMonth}-${selectedYear}`;
-  const paidCount = members.filter((m) => m.paidRecords.includes(currentKey)).length;
-  const dueCount = members.length - paidCount;
+  // সার্চ ফিল্টার
+  const filteredRecords = currentMonthRecords.filter((r) =>
+    r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
@@ -123,15 +107,21 @@ export default function SanghaPage() {
             ← হোমে ফিরে যান
           </Link>
 
-          <div>
+          <div className="flex items-center gap-2">
+            {/* অ্যাডমিন এডিট বাটন */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
-                <span className="bg-green-100 text-green-700 text-xs px-2.5 py-1 rounded-full font-bold">
-                  🔓 অ্যাডমিন মোড চালু
-                </span>
+                <a
+                  href={GOOGLE_SHEET_EDIT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  <span>📊</span> শিটে চাঁদা এডিট করুন
+                </a>
                 <button
                   onClick={() => setIsAdmin(false)}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1 rounded-full font-medium"
+                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full font-medium"
                 >
                   লগআউট
                 </button>
@@ -139,17 +129,32 @@ export default function SanghaPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition"
+                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition"
               >
-                🔒 অ্যাডমিন লগইন
+                🔒 অ্যাডমিন
               </button>
             )}
+
+            {/* রিফ্রেশ বাটন */}
+            <button
+              onClick={fetchGoogleSheetData}
+              disabled={isLoading}
+              title="নতুন ডাটা লোড করতে ক্লিক করুন"
+              className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+            >
+              <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
+            </button>
           </div>
         </div>
 
         {/* হেডার */}
         <div className="bg-red-700 text-white p-6 rounded-2xl shadow-md mb-8">
-          <span className="bg-red-800 text-amber-200 text-xs px-2.5 py-1 rounded font-bold">আমাদের সংগঠন</span>
+          <div className="flex items-center gap-2">
+            <span className="bg-red-800 text-amber-200 text-xs px-2.5 py-1 rounded font-bold">আমাদের সংগঠন</span>
+            <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+            </span>
+          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold mt-2">নবজাগরণ একতা সংঘ</h1>
           <p className="text-red-100 text-sm mt-2">
             নবীন মহাজন পাড়ার সকল পূজা ও সামাজিক উন্নয়নমূলক কাজ এই সংগঠনের মাধ্যমেই পরিচালিত হয়।
@@ -163,7 +168,7 @@ export default function SanghaPage() {
             <div>
               <h2 className="text-lg font-bold text-gray-800">💳 মাসিক চাঁদা ট্র্যাকার (৫০ ৳)</h2>
               <p className="text-xs text-gray-500">
-                {isAdmin ? 'আপনি অ্যাডমিন মোডে আছেন। বাটনে ক্লিক করে পরিশোধ বা বকেয়া পরিবর্তন করতে পারবেন।' : 'সাধারণ দর্শন মোড। শুধুমাত্র দেখার জন্য উন্মুক্ত।'}
+                মাস ও বছর নির্বাচন করে চাঁদা আদায়ের লাইভ হিসাব দেখুন।
               </p>
             </div>
 
@@ -202,7 +207,7 @@ export default function SanghaPage() {
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
               <div className="text-xs text-green-700 font-semibold">{selectedMonth} {selectedYear} আদায়</div>
               <div className="text-xl font-bold text-green-800 mt-1">{paidCount * 50} ৳</div>
-              <div className="text-[11px] text-green-600">{paidCount} জন দিয়েছেন</div>
+              <div className="text-[11px] text-green-600">{paidCount} জন পরিশোধ করেছেন</div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
               <div className="text-xs text-red-700 font-semibold">{selectedMonth} {selectedYear} বাকি</div>
@@ -211,82 +216,84 @@ export default function SanghaPage() {
             </div>
           </div>
 
-          {/* নতুন সদস্য যোগ বাটন (অ্যাডমিন) */}
-          {isAdmin && (
-            <div className="mb-6">
-              {!showAddForm ? (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="bg-red-700 hover:bg-red-800 text-white text-sm font-semibold py-2 px-4 rounded-xl shadow-sm transition flex items-center gap-1"
-                >
-                  + নতুন সদস্য যোগ করুন
-                </button>
-              ) : (
-                <form onSubmit={handleAddMember} className="bg-gray-50 border border-red-200 p-4 rounded-xl flex flex-col sm:flex-row gap-2 items-center">
-                  <input
-                    type="text"
-                    placeholder="সদস্যের নাম লিখুন..."
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    className="w-full sm:flex-1 p-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-red-600"
-                    autoFocus
-                  />
-                  <div className="flex gap-2 w-full sm:w-auto justify-end">
-                    <button
-                      type="submit"
-                      className="bg-red-700 hover:bg-red-800 text-white text-sm px-4 py-2 rounded-lg font-medium"
-                    >
-                      যোগ করুন
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowAddForm(false); setNewMemberName(''); }}
-                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm px-3 py-2 rounded-lg"
-                    >
-                      বাতিল
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          )}
+          {/* 🔍 লাইভ সার্চ বার */}
+          <div className="relative mb-5">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
+                title="সার্চ ক্লিয়ার করুন"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           {/* সদস্যদের তালিকা টেবিল */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-100 text-gray-700 text-xs uppercase">
-                <tr>
-                  <th className="py-2.5 px-3 w-12 text-center">#</th>
-                  <th className="py-2.5 px-3">সদস্যের নাম</th>
-                  <th className="py-2.5 px-3 text-center">{selectedMonth} {selectedYear}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {members.map((member, index) => {
-                  const isPaid = member.paidRecords.includes(currentKey);
-                  return (
-                    <tr key={member.id} className="hover:bg-gray-50">
-                      <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
-                      <td className="py-3 px-3 font-semibold text-gray-800">{member.name}</td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          onClick={() => togglePayment(member.id)}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-full transition ${
-                            isAdmin ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed opacity-90'
-                          } ${
-                            isPaid
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-600'
-                          }`}
-                        >
-                          {isPaid ? '✓ ৫০ ৳ পরিশোধিত' : '✕ বকেয়া'}
-                        </button>
+            {isLoading ? (
+              <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
+                <span className="text-2xl animate-spin">⏳</span>
+                <span>গুগল শিট থেকে চাঁদার হিসাব লোড হচ্ছে...</span>
+              </div>
+            ) : isError ? (
+              <div className="py-8 text-center text-red-600 text-sm">
+                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+              </div>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-100 text-gray-700 text-xs uppercase">
+                  <tr>
+                    <th className="py-2.5 px-3 w-12 text-center">#</th>
+                    <th className="py-2.5 px-3">সদস্যের নাম</th>
+                    <th className="py-2.5 px-3 text-center">{selectedMonth} {selectedYear} (৫০ ৳)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="py-8 text-center text-gray-400 text-sm">
+                        {searchQuery
+                          ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
+                          : `${selectedMonth} ${selectedYear}-এর জন্য গুগল শিটে কোনো রেকর্ড নেই।`}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredRecords.map((member, index) => {
+                      const isPaid = member.status.includes('পরিশোধিত');
+
+                      return (
+                        <tr key={member.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
+                          <td className="py-3 px-3 font-semibold text-gray-800">{member.name}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`text-xs font-bold px-3 py-1.5 rounded-full inline-block ${
+                                isPaid
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-600'
+                              }`}
+                            >
+                              {isPaid ? '✓ ৫০ ৳ পরিশোধিত' : '✕ বকেয়া'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
 
         </div>
@@ -297,7 +304,7 @@ export default function SanghaPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
             <h3 className="text-lg font-bold text-gray-800 mb-1">অ্যাডমিন প্রবেশ</h3>
-            <p className="text-xs text-gray-500 mb-4">হিসাব পরিবর্তন করতে ৪ ডিজিটের পিন লিখুন।</p>
+            <p className="text-xs text-gray-500 mb-4">গুগল শিট খুলতে ৪ ডিজিটের পিন লিখুন।</p>
             
             <form onSubmit={handleAdminLogin}>
               <input
