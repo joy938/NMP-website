@@ -3,6 +3,18 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
+// গুগল ড্রাইভ লিংককে স্বয়ংক্রিয়ভাবে সরাসরি ছবিতে রূপান্তর করার ফাংশন
+const formatImageUrl = (url) => {
+  if (!url) return '';
+  const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
+  const match = url.match(driveRegex);
+  if (match && match[1]) {
+    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
+    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+  }
+  return url;
+};
+
 export default function SmaranikaPage() {
   const ADMIN_PIN = '0000';
 
@@ -12,7 +24,6 @@ export default function SmaranikaPage() {
   const [selectedYear, setSelectedYear] = useState('সব');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // প্রদীপ প্রজ্বলনের স্টেট (কোনো কাউন্টিং নেই, শুধু জ্বলে থাকবে)
   const [litDiyas, setLitDiyas] = useState({});
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -48,7 +59,7 @@ export default function SmaranikaPage() {
             name: cols[0],
             date: cols[1] || 'তারিখ জানা নেই',
             year: cols[2] ? cols[2].trim() : '',
-            photoUrl: cols[3] || '',
+            photoUrl: formatImageUrl(cols[3] || ''), // গুগল ড্রাইভ লিংক ঠিক করা হলো
           });
         }
       }
@@ -75,7 +86,6 @@ export default function SmaranikaPage() {
     }
   }, []);
 
-  // ক্লিক করলে প্রদীপ প্রজ্জ্বলিত হয়ে থাকবে
   const handleLightDiya = (id) => {
     const updated = { ...litDiyas, [id]: true };
     setLitDiyas(updated);
@@ -254,20 +264,20 @@ export default function SmaranikaPage() {
                   key={soul.id}
                   className="bg-white rounded-2xl p-5 border border-amber-200/70 shadow-sm hover:shadow-md transition flex flex-col justify-between text-center relative overflow-hidden group"
                 >
-                  {/* ওপরের সোনালী বর্ডার */}
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-amber-600 to-amber-400"></div>
 
                   <div>
-                    {/* ছবি অথবা প্রদীপের ফ্রেম (ছবির লিংক দিলে এখানে সরাসরি ছবি চলে আসবে) */}
-                    <div className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden">
+                    {/* ছবি অথবা প্রদীপের ফ্রেম (গুগল ড্রাইভ লিংক দিলে ছবি দেখাবে) */}
+                    <div className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden relative">
                       {soul.photoUrl ? (
                         <img
                           src={soul.photoUrl}
                           alt={soul.name}
                           className="w-full h-full object-cover rounded-full"
                           onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = '';
+                            // যদি লিংকে সমস্যা হয় তবে ব্রোকেন ছবি না দেখিয়ে প্রদীপ দেখাবে
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.parentElement.innerHTML = '<span class="text-3xl">🪔</span>';
                           }}
                         />
                       ) : (
@@ -286,7 +296,7 @@ export default function SmaranikaPage() {
                     </p>
                   </div>
 
-                  {/* ভার্চুয়াল প্রদীপ প্রজ্বলন বোতাম (কোনো কাউন্টিং সংখ্যা ছাড়া) */}
+                  {/* প্রদীপ প্রজ্বলন বোতাম */}
                   <div className="mt-5 pt-3 border-t border-stone-100 flex flex-col items-center">
                     <button
                       onClick={() => handleLightDiya(soul.id)}
