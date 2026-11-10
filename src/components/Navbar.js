@@ -17,15 +17,14 @@ export default function Navbar() {
           নবীন মহাজন পাড়া
         </Link>
 
-        {/* ল্যাপটপ মেনু */}
+        {/* ল্যাপটপ মেনু (কোনো ক্যামেরা আইকন ছাড়া শুধু গ্যালারি) */}
         <div className="hidden md:flex space-x-6 text-sm font-medium">
           <Link href="/" className="hover:text-yellow-300">হোম</Link>
           <Link href="/schedule" className="hover:text-yellow-300">পূজার সময়সূচী</Link>
           <Link href="/sangha" className="hover:text-yellow-300">সংঘের বিবরণ</Link>
           <Link href="/pronami" className="hover:text-yellow-300">পূজার প্রণামী</Link>
-          <Link href="/smaranika" className="hover:text-yellow-300 flex items-center gap-1">
-            <span>🪔</span> স্মরণিকা
-          </Link>
+          <Link href="/gallery" className="hover:text-yellow-300">গ্যালারি</Link>
+          <Link href="/smaranika" className="hover:text-yellow-300">স্মরণিকা</Link>
         </div>
 
         {/* মোবাইল বাটন */}
@@ -43,7 +42,8 @@ export default function Navbar() {
           <Link href="/schedule" onClick={() => setIsOpen(false)} className="block py-1 hover:text-yellow-300">পূজার সময়সূচী</Link>
           <Link href="/sangha" onClick={() => setIsOpen(false)} className="block py-1 hover:text-yellow-300">সংঘের বিবরণ</Link>
           <Link href="/pronami" onClick={() => setIsOpen(false)} className="block py-1 hover:text-yellow-300">পূজার প্রণামী</Link>
-          <Link href="/smaranika" onClick={() => setIsOpen(false)} className="block py-1 text-yellow-200 hover:text-yellow-300 font-bold">🪔 স্মরণিকা</Link>
+          <Link href="/gallery" onClick={() => setIsOpen(false)} className="block py-1 hover:text-yellow-300">গ্যালারি</Link>
+          <Link href="/smaranika" onClick={() => setIsOpen(false)} className="block py-1 hover:text-yellow-300">স্মরণিকা</Link>
         </div>
       )}
     </nav>
