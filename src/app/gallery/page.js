@@ -3,28 +3,36 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
+// গুগল ড্রাইভের জন্য সবচেয়ে নির্ভরযোগ্য হাই-স্পিড ইমেজ লিংক কনভার্টার
+const formatImageUrl = (url) => {
+  if (!url) return '';
+  const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
+  const match = url.match(driveRegex);
+  if (match && match[1]) {
+    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
+    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
+  }
+  return url;
+};
+
 export default function GalleryPage() {
   const ADMIN_PIN = '0000';
 
-  // তোমার গ্যালারির গুগল শিট লিংক
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/edit?usp=sharing';
 
   const [selectedAlbum, setSelectedAlbum] = useState('সব ছবি');
-  const [selectedImage, setSelectedImage] = useState(null); // ফুলস্ক্রিন ছবির জন্য
+  const [selectedImage, setSelectedImage] = useState(null);
 
-  // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডাটা ও লোডিং স্টেট
   const [photos, setPhotos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  // গুগল শিট থেকে ছবির ডাটা লোড
   const fetchGalleryData = async () => {
     setIsLoading(true);
     setIsError(false);
@@ -46,7 +54,7 @@ export default function GalleryPage() {
         if (cols.length >= 2 && cols[0]) {
           parsedPhotos.push({
             id: i,
-            imageUrl: cols[0],
+            imageUrl: formatImageUrl(cols[0]),
             caption: cols[1] || 'পূজার স্মৃতি',
             album: cols[2] ? cols[2].trim() : 'সাধারণ',
           });
@@ -78,10 +86,8 @@ export default function GalleryPage() {
     }
   };
 
-  // শিট থেকে সমস্ত অ্যালবামের নাম বের করা
   const albums = ['সব ছবি', ...Array.from(new Set(photos.map((p) => p.album).filter(Boolean)))];
 
-  // ফিল্টার করা ছবি
   const filteredPhotos = photos.filter(
     (p) => selectedAlbum === 'সব ছবি' || p.album === selectedAlbum
   );
@@ -119,7 +125,7 @@ export default function GalleryPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition"
+                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3.5 py-1.5 rounded-full font-semibold transition"
               >
                 🔒 অ্যাডমিন
               </button>
@@ -146,7 +152,7 @@ export default function GalleryPage() {
           </p>
         </div>
 
-        {/* অ্যালবাম ফিল্টার বাটনসমূহ */}
+        {/* অ্যালবাম ফিল্টার */}
         <div className="flex flex-wrap gap-2 mb-8 justify-center">
           {albums.map((album) => {
             const isActive = selectedAlbum === album;
@@ -166,11 +172,11 @@ export default function GalleryPage() {
           })}
         </div>
 
-        {/* ছবি প্রদর্শন গ্রিড */}
+        {/* ছবি গ্রিড */}
         {isLoading ? (
           <div className="py-20 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
             <span className="text-3xl animate-spin">⏳</span>
-            <span>গুগল শিট থেকে ছবি লোড হচ্ছে...</span>
+            <span>ছবি লোড হচ্ছে...</span>
           </div>
         ) : isError ? (
           <div className="py-12 text-center text-red-600 text-sm">
@@ -178,7 +184,7 @@ export default function GalleryPage() {
           </div>
         ) : filteredPhotos.length === 0 ? (
           <div className="bg-white p-12 text-center text-gray-400 rounded-2xl border border-gray-200 text-sm">
-            এই অ্যালবামে এখনো কোনো ছবি যুক্ত নেই। গুগল শিটে ছবির লিংক দিলে এখানে চলে আসবে।
+            এই অ্যালবামে কোনো ছবি নেই।
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -188,21 +194,18 @@ export default function GalleryPage() {
                 onClick={() => setSelectedImage(photo)}
                 className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl transition duration-300 group cursor-pointer flex flex-col justify-between"
               >
-                {/* ইমেজ কন্টেইনার */}
-                <div className="relative h-56 md:h-64 overflow-hidden bg-gray-100">
+                <div className="relative h-56 md:h-64 overflow-hidden bg-gray-100 flex items-center justify-center">
                   <img
                     src={photo.imageUrl}
                     alt={photo.caption}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     loading="lazy"
                   />
-                  {/* অ্যালবাম ব্যাজ */}
                   <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg">
                     {photo.album}
                   </span>
                 </div>
 
-                {/* ক্যাপশন */}
                 <div className="p-4">
                   <h3 className="font-bold text-sm text-gray-800 line-clamp-2">
                     {photo.caption}
@@ -218,13 +221,12 @@ export default function GalleryPage() {
 
       </div>
 
-      {/* ফুলস্ক্রিন লাইটবক্স মডাল (Fullscreen Lightbox) */}
+      {/* ফুলস্ক্রিন ভিউ */}
       {selectedImage && (
         <div
           className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4"
           onClick={() => setSelectedImage(null)}
         >
-          {/* ক্লোজ বাটন */}
           <button
             onClick={() => setSelectedImage(null)}
             className="absolute top-5 right-5 text-white/80 hover:text-white text-3xl font-bold bg-black/50 w-10 h-10 rounded-full flex items-center justify-center"
@@ -232,7 +234,6 @@ export default function GalleryPage() {
             ✕
           </button>
 
-          {/* বড় ছবি */}
           <div
             className="max-w-4xl max-h-[80vh] flex flex-col items-center"
             onClick={(e) => e.stopPropagation()}
@@ -242,7 +243,6 @@ export default function GalleryPage() {
               alt={selectedImage.caption}
               className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl"
             />
-            {/* ছবির ক্যাপশন */}
             <div className="mt-3 text-center text-white">
               <span className="text-xs bg-red-600 px-2 py-0.5 rounded font-bold mr-2">
                 {selectedImage.album}
