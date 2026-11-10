@@ -5,7 +5,8 @@ import UpcomingPuja from '../components/UpcomingPuja';
 export default function Home() {
   // তোমার পাড়ার অফিশিয়াল ফেসবুক, মেসেঞ্জার ও হোয়াটসঅ্যাপ গ্রুপের লিংক
   const FACEBOOK_GROUP_LINK = "https://www.facebook.com/share/g/18qkaaH1Nw/";
-  const MESSENGER_GROUP_LINK = "https://m.me/j/YEaDiAW7fWW_VYHH/?send_source=gc%3Acopy_invite_link_t";
+
+  const MESSENGER_GROUP_LINK = "https://m.me/j/YEaDiAW7fWW_VYHH";
   const WHATSAPP_GROUP_LINK = "https://chat.whatsapp.com/BvN5tcgY2rW2Xl2kmem1Tl";
 
   return (
