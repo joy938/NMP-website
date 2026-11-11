@@ -15,13 +15,11 @@ export default function PronamiPage() {
   const [selectedYear, setSelectedYear] = useState(2026);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডাটা ও লোডিং স্টেট
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -99,14 +97,13 @@ export default function PronamiPage() {
 
       <div className="max-w-4xl mx-auto py-8 px-4">
         
-        {/* টপ বার: ব্যাক বাটন, অ্যাডমিন ও রিফ্রেশ */}
+        {/* টপ বার */}
         <div className="flex justify-between items-center mb-6">
           <Link href="/" className="inline-flex items-center text-amber-700 hover:text-amber-900 font-medium text-sm">
             ← হোমে ফিরে যান
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* শুধু অ্যাডমিন লগইন করলেই শিট এডিট করার বাটন আসবে */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <a
@@ -133,7 +130,6 @@ export default function PronamiPage() {
               </button>
             )}
 
-            {/* সাধারণ রিফ্রেশ বাটন সবার জন্য থাকবে */}
             <button
               onClick={fetchGoogleSheetData}
               disabled={isLoading}
@@ -162,7 +158,7 @@ export default function PronamiPage() {
         {/* মূল বক্স */}
         <div className="bg-white rounded-2xl shadow border border-gray-100 p-5">
           
-          {/* ফিল্টার: পূজা ও বছর */}
+          {/* ফিল্টার */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
             <div>
               <h2 className="text-lg font-bold text-gray-800">📋 প্রণামীর তালিকা</h2>
@@ -239,7 +235,7 @@ export default function PronamiPage() {
             )}
           </div>
 
-          {/* তালিকা টেবিল */}
+          {/* তালিকা টেবিল (টাকার চিহ্ন ৳ সরিয়ে শুধু খাঁটি সংখ্যা রাখা হলো) */}
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
@@ -248,7 +244,7 @@ export default function PronamiPage() {
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
               </div>
             ) : (
               <table className="w-full text-left text-sm">
@@ -279,15 +275,22 @@ export default function PronamiPage() {
                         <tr key={r.id} className="hover:bg-gray-50">
                           <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
                           <td className="py-3 px-3 font-semibold text-gray-800">{r.name}</td>
+                          
+                          {/* ধার্য টাকা (৳ চিহ্ন ছাড়া) */}
                           <td className="py-3 px-3 text-right font-medium text-gray-600">
-                            {r.pledged > 0 ? `${r.pledged} ৳` : '—'}
+                            {r.pledged > 0 ? r.pledged : '—'}
                           </td>
+                          
+                          {/* দিয়েছে টাকা (৳ চিহ্ন ছাড়া) */}
                           <td className="py-3 px-3 text-right font-bold text-green-700">
-                            {`${r.paid} ৳`}
+                            {r.paid}
                           </td>
+                          
+                          {/* বকেয়া টাকা (৳ চিহ্ন ছাড়া) */}
                           <td className="py-3 px-3 text-right font-bold text-red-600">
-                            {due > 0 ? `${due} ৳` : '০ ৳'}
+                            {due > 0 ? due : '০'}
                           </td>
+                          
                           <td className="py-3 px-3 text-center">
                             {due <= 0 && r.pledged > 0 ? (
                               <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
@@ -295,7 +298,7 @@ export default function PronamiPage() {
                               </span>
                             ) : (
                               <span className="bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full">
-                                {r.paid > 0 ? `বাকি ${due} ৳` : '✕ বকেয়া'}
+                                {r.paid > 0 ? `বাকি ${due}` : '✕ বকেয়া'}
                               </span>
                             )}
                           </td>
