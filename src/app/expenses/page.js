@@ -6,9 +6,10 @@ import Navbar from '../../components/Navbar';
 export default function ExpensesPage() {
   const ADMIN_PIN = '0000';
 
-  // তোমার পূজার খরচের গুগল শিট লিংক
-  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/gviz/tq?tqx=out:csv';
-  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/edit?usp=sharing';
+  // খরচের গুগল শিট ও প্রণামীর গুগল শিটের লিংক (আদায় ও ব্যয়ের সমন্বয়ের জন্য)
+  const EXPENSES_CSV_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/gviz/tq?tqx=out:csv';
+  const EXPENSES_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/edit?usp=sharing';
+  const PRONAMI_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/gviz/tq?tqx=out:csv';
 
   const pujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
   const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
@@ -23,30 +24,29 @@ export default function ExpensesPage() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডাটা ও লোডিং স্টেট
+  // ডাটা স্টেট
   const [expenses, setExpenses] = useState([]);
+  const [pronamiRecords, setPronamiRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  // গুগল শিট থেকে খরচের ডাটা লোড
-  const fetchExpensesData = async () => {
+  // খরচ ও প্রণামী উভয় শিট থেকে ডাটা আনা
+  const fetchData = async () => {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
-      const csvText = await response.text();
-
-      const lines = csvText.trim().split(/\r?\n/);
+      // ১. খরচের ডাটা আনা
+      const expRes = await fetch(EXPENSES_CSV_URL);
+      const expText = await expRes.text();
+      const expLines = expText.trim().split(/\r?\n/);
       const parsedExpenses = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
+      for (let i = 1; i < expLines.length; i++) {
+        const line = expLines[i];
         if (!line.trim()) continue;
-
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
+          v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
         );
-
         if (cols.length >= 5 && cols[0]) {
           parsedExpenses.push({
             id: i,
@@ -58,10 +58,32 @@ export default function ExpensesPage() {
           });
         }
       }
-
       setExpenses(parsedExpenses);
+
+      // ২. প্রণামীর ডাটা আনা (মোট আয়ের হিসাবের জন্য)
+      const proRes = await fetch(PRONAMI_CSV_URL);
+      const proText = await proRes.text();
+      const proLines = proText.trim().split(/\r?\n/);
+      const parsedPronami = [];
+
+      for (let i = 1; i < proLines.length; i++) {
+        const line = proLines[i];
+        if (!line.trim()) continue;
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
+          v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+        );
+        if (cols.length >= 5 && cols[0]) {
+          parsedPronami.push({
+            puja: cols[1] || 'কার্তিক পূজা',
+            year: Number(cols[2]) || 2025,
+            paid: Number(cols[4]) || 0,
+          });
+        }
+      }
+      setPronamiRecords(parsedPronami);
+
     } catch (error) {
-      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
+      console.error('ডাটা লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -69,7 +91,7 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    fetchExpensesData();
+    fetchData();
   }, []);
 
   const handleAdminLogin = (e) => {
@@ -84,37 +106,55 @@ export default function ExpensesPage() {
     }
   };
 
-  // নির্বাচিত পূজা ও বছরের সম্পূর্ণ হিসাব
-  const allYearExpenses = expenses.filter(
+  // ১. নির্বাচিত পূজার মোট খরচ
+  const currentExpenses = expenses.filter(
     (e) => e.puja === selectedPuja && Number(e.year) === Number(selectedYear)
   );
+  const totalExpense = currentExpenses.reduce((sum, item) => sum + item.cost, 0);
 
-  const totalExpense = allYearExpenses.reduce((sum, item) => sum + item.cost, 0);
+  // ২. নির্বাচিত পূজার মোট আদায় (প্রণামী শিট থেকে)
+  const currentIncomeRecords = pronamiRecords.filter(
+    (r) => r.puja === selectedPuja && Number(r.year) === Number(selectedYear)
+  );
+  const totalIncome = currentIncomeRecords.reduce((sum, item) => sum + item.paid, 0);
 
-  // সার্চ অনুযায়ী ফিল্টার
-  const filteredExpenses = allYearExpenses.filter((item) =>
+  // ৩. অবশিষ্ট তহবিল / ব্যালেন্স (আদায় - খরচ)
+  const netBalance = totalIncome - totalExpense;
+
+  // সার্চ ফিল্টার
+  const filteredExpenses = currentExpenses.filter((item) =>
     item.title.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
     item.category.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
-      <Navbar />
+      <div className="print:hidden">
+        <Navbar />
+      </div>
 
       <div className="max-w-4xl mx-auto py-8 px-4">
         
-        {/* টপ বার */}
-        <div className="flex justify-between items-center mb-6">
+        {/* টপ বার (প্রিন্টে লুকানো থাকবে) */}
+        <div className="flex justify-between items-center mb-6 print:hidden">
           <Link href="/" className="inline-flex items-center text-purple-700 hover:text-purple-900 font-medium text-sm">
             ← হোমে ফিরে যান
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* অ্যাডমিন এডিট বাটন */}
+            {/* 🖨️ প্রিন্ট / PDF বাটন */}
+            <button
+              onClick={() => window.print()}
+              title="তালিকাটি প্রিন্ট বা PDF হিসেবে সেভ করুন"
+              className="text-xs bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 px-3.5 py-1.5 rounded-full font-semibold transition flex items-center gap-1 shadow-2xs"
+            >
+              <span>🖨️</span> প্রিন্ট / PDF
+            </button>
+
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <a
-                  href={GOOGLE_SHEET_EDIT_URL}
+                  href={EXPENSES_EDIT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
@@ -137,9 +177,8 @@ export default function ExpensesPage() {
               </button>
             )}
 
-            {/* রিফ্রেশ বাটন */}
             <button
-              onClick={fetchExpensesData}
+              onClick={fetchData}
               disabled={isLoading}
               title="নতুন ডাটা লোড করতে ক্লিক করুন"
               className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
@@ -150,28 +189,30 @@ export default function ExpensesPage() {
         </div>
 
         {/* হেডার ব্যানার */}
-        <div className="bg-gradient-to-r from-purple-700 to-indigo-600 text-white p-6 rounded-2xl shadow-md mb-8">
-          <div className="flex items-center gap-2">
+        <div className="bg-gradient-to-r from-purple-700 to-indigo-600 text-white p-6 md:p-8 rounded-3xl shadow-md mb-8">
+          <div className="flex items-center gap-2 print:hidden">
             <span className="bg-white/20 text-purple-200 text-xs px-2.5 py-1 rounded font-bold">ব্যয়-বিবরণ</span>
             <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ হিসাব
             </span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার খরচের খাতা</h1>
-          <p className="text-purple-100 text-sm mt-2">
-            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ ব্যয়ের হিসাব দেখানো হচ্ছে।
+          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">
+            নবীন মহাজন পাড়া — পূজার খরচের খাতা
+          </h1>
+          <p className="text-purple-100 text-xs md:text-sm mt-1">
+            প্রতিমা, ডেকোরেশন, প্রসাদ ও বিবিধ খাতে ব্যয় এবং অবশিষ্ট তহবিলের পূর্ণাঙ্গ বিবরণী।
           </p>
         </div>
 
         {/* মূল বক্স */}
         <div className="bg-white rounded-2xl shadow border border-gray-100 p-5 md:p-6">
           
-          {/* ফিল্টার: পূজা ও বছর নির্বাচন */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
+          {/* ফিল্টার: পূজা ও বছর নির্বাচন (প্রিন্টে লুকানো থাকবে) */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b print:hidden">
             <div>
-              <h2 className="text-lg font-bold text-gray-800">📋 {selectedPuja}র ব্যয়ের বিবরণী</h2>
+              <h2 className="text-lg font-bold text-gray-800">📋 {selectedPuja}র হিসাব</h2>
               <p className="text-xs text-gray-500">
-                পূজা ও বছর পরিবর্তন করে নির্দিষ্ট আয়োজনের খরচ দেখুন।
+                পূজা ও বছর পরিবর্তন করে আর্থিক বিবরণী দেখুন।
               </p>
             </div>
 
@@ -204,27 +245,60 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-          {/* মোট খরচের বড় সামারি কার্ড (নির্বাচিত পূজা অনুযায়ী স্বয়ংক্রিয় হিসাব) */}
-          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-5 text-center mb-6 shadow-xs">
-            <span className="text-xs text-purple-700 font-bold uppercase tracking-wider">
-              {selectedPuja} ({selectedYear}) — মোট ব্যয়
-            </span>
-            <div className="text-3xl md:text-4xl font-extrabold text-purple-900 mt-1">
-              {totalExpense} ৳
+          {/* ৩টি কার্ড: মোট আদায়, মোট খরচ, এবং অবশিষ্ট তহবিল (স্বয়ংক্রিয় হিসাব) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            
+            {/* কার্ড ১: মোট আদায় */}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
+              <span className="text-xs text-blue-700 font-bold uppercase">মোট আদায় (প্রণামী)</span>
+              <div className="text-xl md:text-2xl font-black text-blue-900 mt-1">
+                {totalIncome} ৳
+              </div>
+              <span className="text-[10px] text-blue-600 mt-0.5 block">পূজার মোট সংগৃহীত অর্থ</span>
             </div>
-            <span className="text-[11px] text-purple-600 mt-1 block">
-              (মোট {allYearExpenses.length} টি খাতে এই অর্থ ব্যয় হয়েছে)
-            </span>
+
+            {/* কার্ড ২: মোট খরচ */}
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center">
+              <span className="text-xs text-red-700 font-bold uppercase">মোট খরচ (ব্যয়)</span>
+              <div className="text-xl md:text-2xl font-black text-red-900 mt-1">
+                {totalExpense} ৳
+              </div>
+              <span className="text-[10px] text-red-600 mt-0.5 block">মোট {currentExpenses.length}টি খাতে ব্যয়</span>
+            </div>
+
+            {/* কার্ড ৩: অবশিষ্ট তহবিল (উদ্বৃত্ত বা ঘাটতি) */}
+            <div className={`rounded-2xl p-4 text-center border ${
+              netBalance >= 0 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-amber-50 border-amber-300'
+            }`}>
+              <span className={`text-xs font-bold uppercase ${
+                netBalance >= 0 ? 'text-green-700' : 'text-amber-800'
+              }`}>
+                অবশিষ্ট তহবিল / ব্যালেন্স
+              </span>
+              <div className={`text-xl md:text-2xl font-black mt-1 ${
+                netBalance >= 0 ? 'text-green-800' : 'text-red-700'
+              }`}>
+                {netBalance >= 0 ? `${netBalance} ৳` : `- ${Math.abs(netBalance)} ৳`}
+              </div>
+              <span className={`text-[10px] font-bold mt-0.5 block ${
+                netBalance >= 0 ? 'text-green-600' : 'text-amber-800'
+              }`}>
+                {netBalance >= 0 ? '✓ তহবিলে জমা (উদ্বৃত্ত)' : '⚠️ ঘাটতি'}
+              </span>
+            </div>
+
           </div>
 
-          {/* 🔍 সার্চ বার */}
-          <div className="relative mb-5">
+          {/* 🔍 সার্চ বার (প্রিন্টে লুকানো থাকবে) */}
+          <div className="relative mb-5 print:hidden">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
               🔍
             </span>
             <input
               type="text"
-              placeholder="খরচের খাত বা ক্যাটাগরি দিয়ে খুঁজুন..."
+              placeholder="খরচের বিবরণ বা ক্যাটাগরি দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-purple-600 bg-gray-50 focus:bg-white transition"
@@ -239,12 +313,12 @@ export default function ExpensesPage() {
             )}
           </div>
 
-          {/* তালিকা টেবিল */}
+          {/* তালিকা টেবিল (টাকার চিহ্ন ৳ ছাড়া খাঁটি সংখ্যা) */}
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
                 <span className="text-2xl animate-spin">⏳</span>
-                <span>গুগল শিট থেকে খরচের হিসাব লোড হচ্ছে...</span>
+                <span>গুগল শিট থেকে ব্যয়ের হিসাব লোড হচ্ছে...</span>
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
@@ -257,7 +331,7 @@ export default function ExpensesPage() {
                     <th className="py-2.5 px-3 w-10 text-center">#</th>
                     <th className="py-2.5 px-3">খরচের বিবরণ / খাত</th>
                     <th className="py-2.5 px-3">ক্যাটাগরি</th>
-                    <th className="py-2.5 px-3 text-right">খরচের পরিমাণ</th>
+                    <th className="py-2.5 px-3 text-right">খরচ (টাকা)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -279,8 +353,9 @@ export default function ExpensesPage() {
                             {item.category}
                           </span>
                         </td>
+                        {/* ৳ চিহ্ন সরিয়ে পরিষ্কার সংখ্যা রাখা হলো */}
                         <td className="py-3 px-3 text-right font-bold text-red-600">
-                          {item.cost} ৳
+                          {item.cost}
                         </td>
                       </tr>
                     ))
