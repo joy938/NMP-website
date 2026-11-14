@@ -13,8 +13,12 @@ export default function SanghaPage() {
   const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
 
-  const [selectedMonth, setSelectedMonth] = useState('নভেম্বর');
-  const [selectedYear, setSelectedYear] = useState(2026);
+  // স্বয়ংক্রিয়ভাবে বর্তমান মাস ও বছর বের করার স্মার্ট কোড
+  const currentMonthName = months[new Date().getMonth()];
+  const currentYearNumber = new Date().getFullYear();
+
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthName);
+  const [selectedYear, setSelectedYear] = useState(currentYearNumber);
   const [searchQuery, setSearchQuery] = useState('');
 
   // অ্যাডমিন স্টেট
@@ -28,12 +32,11 @@ export default function SanghaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  // গুগল শিট থেকে ডাটা লোড
   const fetchGoogleSheetData = async () => {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
+      const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
       const csvText = await response.text();
 
       const lines = csvText.trim().split(/\r?\n/);
@@ -51,8 +54,8 @@ export default function SanghaPage() {
           parsedRecords.push({
             id: i,
             name: cols[0],
-            month: cols[1] || 'নভেম্বর',
-            year: Number(cols[2]) || 2026,
+            month: cols[1] || currentMonthName,
+            year: Number(cols[2]) || currentYearNumber,
             status: cols[3] || 'বকেয়া',
           });
         }
@@ -83,7 +86,6 @@ export default function SanghaPage() {
     }
   };
 
-  // নির্বাচিত মাস ও বছরের রেকর্ড
   const currentMonthRecords = records.filter(
     (r) => r.month === selectedMonth && Number(r.year) === Number(selectedYear)
   );
@@ -91,7 +93,6 @@ export default function SanghaPage() {
   const paidCount = currentMonthRecords.filter((r) => r.status.includes('পরিশোধিত')).length;
   const dueCount = currentMonthRecords.length - paidCount;
 
-  // সার্চ ফিল্টার
   const filteredRecords = currentMonthRecords.filter((r) =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
@@ -108,7 +109,6 @@ export default function SanghaPage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* অ্যাডমিন এডিট বাটন */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <a
@@ -135,7 +135,6 @@ export default function SanghaPage() {
               </button>
             )}
 
-            {/* রিফ্রেশ বাটন */}
             <button
               onClick={fetchGoogleSheetData}
               disabled={isLoading}
@@ -172,7 +171,6 @@ export default function SanghaPage() {
               </p>
             </div>
 
-            {/* মাস ও বছর ড্রপডাউন */}
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
                 <span className="text-xs font-semibold text-gray-600">মাস:</span>
@@ -202,7 +200,6 @@ export default function SanghaPage() {
             </div>
           </div>
 
-          {/* স্ট্যাটাস কার্ড */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
               <div className="text-xs text-green-700 font-semibold">{selectedMonth} {selectedYear} আদায়</div>
@@ -216,14 +213,13 @@ export default function SanghaPage() {
             </div>
           </div>
 
-          {/* 🔍 লাইভ সার্চ বার */}
           <div className="relative mb-5">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
               🔍
             </span>
             <input
               type="text"
-              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
+              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, জয়, শেখর)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -239,7 +235,6 @@ export default function SanghaPage() {
             )}
           </div>
 
-          {/* সদস্যদের তালিকা টেবিল */}
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
@@ -299,7 +294,7 @@ export default function SanghaPage() {
         </div>
       </div>
 
-      {/* অ্যাডমিন পিন কোড ইনপুট মডাল */}
+      {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">

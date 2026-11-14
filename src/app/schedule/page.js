@@ -6,33 +6,45 @@ import Navbar from '../../components/Navbar';
 export default function SchedulePage() {
   const ADMIN_PIN = '0000';
 
-  // তোমার সময়সূচীর গুগল শিট লিংক
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/edit?usp=sharing';
+  const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
-  const pujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
+  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডাটা ও লোডিং স্টেট
   const [schedules, setSchedules] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  // গুগল শিট থেকে সময়সূচী ডাটা লোড
   const fetchScheduleData = async () => {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
-      const csvText = await response.text();
+      const [response, upcomingRes] = await Promise.all([
+        fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`${UPCOMING_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+      ]);
 
+      let upcomingPujaName = '';
+      if (upcomingRes && upcomingRes.ok) {
+        const upText = await upcomingRes.text();
+        const upLines = upText.trim().split(/\r?\n/);
+        if (upLines.length >= 2) {
+          const upCols = upLines[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
+            v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+          );
+          if (upCols[0]) upcomingPujaName = upCols[0];
+        }
+      }
+
+      const csvText = await response.text();
       const lines = csvText.trim().split(/\r?\n/);
       const parsedSchedules = [];
 
@@ -56,6 +68,14 @@ export default function SchedulePage() {
       }
 
       setSchedules(parsedSchedules);
+
+      if (upcomingPujaName) {
+        const allPujas = Array.from(
+          new Set([...defaultPujas, ...parsedSchedules.map((s) => s.puja).filter(Boolean)])
+        );
+        const matchedPuja = allPujas.find((p) => upcomingPujaName.includes(p));
+        if (matchedPuja) setSelectedPuja(matchedPuja);
+      }
     } catch (error) {
       console.error('সময়সূচী লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
@@ -80,10 +100,13 @@ export default function SchedulePage() {
     }
   };
 
-  // নির্বাচিত পূজা অনুযায়ী ফিল্টার
+  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ট্যাবে আসবে
+  const pujas = Array.from(
+    new Set([...defaultPujas, ...schedules.map((s) => s.puja).filter(Boolean)])
+  );
+
   const currentPujaSchedules = schedules.filter((item) => item.puja === selectedPuja);
 
-  // সার্চ ফিল্টার
   const filteredSchedules = currentPujaSchedules.filter((item) =>
     item.event.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
     item.date.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
@@ -103,7 +126,6 @@ export default function SchedulePage() {
           </Link>
 
           <div className="flex items-center gap-2">
-            {/* অ্যাডমিন এডিট বাটন */}
             {isAdmin ? (
               <div className="flex items-center gap-2">
                 <a
@@ -130,7 +152,6 @@ export default function SchedulePage() {
               </button>
             )}
 
-            {/* রিফ্রেশ বাটন */}
             <button
               onClick={fetchScheduleData}
               disabled={isLoading}
@@ -167,7 +188,7 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* পূজা সিলেক্ট করার ট্যাব বাটনসমূহ */}
+        {/* পূজা সিলেক্ট করার ট্যাব */}
         <div className="flex flex-wrap gap-2 mb-6 justify-center sm:justify-start">
           {pujas.map((puja) => {
             const isActive = selectedPuja === puja;
@@ -229,7 +250,7 @@ export default function SchedulePage() {
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : filteredSchedules.length === 0 ? (
               <div className="py-8 text-center text-gray-400 text-sm">

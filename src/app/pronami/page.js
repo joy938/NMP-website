@@ -3,16 +3,28 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
+// বাংলা সংখ্যা (৫০০) বা কমা (1,000) থাকলে স্বয়ংক্রিয়ভাবে ইংরেজি সংখ্যায় রূপান্তর
+const toNumber = (str) => {
+  if (!str) return 0;
+  const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  const en = String(str)
+    .replace(/[০-৯]/g, (d) => bn.indexOf(d))
+    .replace(/,/g, '')
+    .trim();
+  return Number(en) || 0;
+};
+
 export default function PronamiPage() {
   const ADMIN_PIN = '0000';
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/edit?usp=sharing';
+  const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
-  const pujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
+  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
   const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
 
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
-  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -28,9 +40,28 @@ export default function PronamiPage() {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
-      const csvText = await response.text();
+      const [response, upcomingRes] = await Promise.all([
+        fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`${UPCOMING_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+      ]);
 
+      let upcomingPujaName = '';
+      if (upcomingRes && upcomingRes.ok) {
+        const upText = await upcomingRes.text();
+        const upLines = upText.trim().split(/\r?\n/);
+        if (upLines.length >= 2) {
+          const upCols = upLines[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
+            v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+          );
+          if (upCols[0]) upcomingPujaName = upCols[0];
+          if (upCols[2]) {
+            const convertedYear = toNumber(upCols[2].match(/[০-৯\d]{4}/)?.[0]);
+            if (convertedYear) setSelectedYear(convertedYear);
+          }
+        }
+      }
+
+      const csvText = await response.text();
       const lines = csvText.trim().split(/\r?\n/);
       const parsedRecords = [];
 
@@ -47,14 +78,23 @@ export default function PronamiPage() {
             id: i,
             name: cols[0],
             puja: cols[1] || 'কার্তিক পূজা',
-            year: Number(cols[2]) || 2026,
-            pledged: Number(cols[3]) || 0,
-            paid: Number(cols[4]) || 0,
+            year: toNumber(cols[2]) || new Date().getFullYear(),
+            pledged: toNumber(cols[3]),
+            paid: toNumber(cols[4]),
           });
         }
       }
 
       setRecords(parsedRecords);
+
+      // আসন্ন পূজা শিট ও বর্তমান শিটের সব পূজা মিলিয়ে অটো সিলেক্ট
+      if (upcomingPujaName) {
+        const allPujas = Array.from(
+          new Set([...defaultPujas, ...parsedRecords.map((r) => r.puja).filter(Boolean)])
+        );
+        const matchedPuja = allPujas.find((p) => upcomingPujaName.includes(p));
+        if (matchedPuja) setSelectedPuja(matchedPuja);
+      }
     } catch (error) {
       console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
@@ -79,6 +119,11 @@ export default function PronamiPage() {
     }
   };
 
+  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ড্রপডাউনে আসবে
+  const pujas = Array.from(
+    new Set([...defaultPujas, ...records.map((r) => r.puja).filter(Boolean)])
+  );
+
   const allYearRecords = records.filter(
     (r) => r.puja === selectedPuja && Number(r.year) === Number(selectedYear)
   );
@@ -93,30 +138,40 @@ export default function PronamiPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
-      <Navbar />
+      <div className="print:hidden">
+        <Navbar />
+      </div>
 
-      <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto py-6 md:py-8 px-2.5 sm:px-4">
         
         {/* টপ বার */}
-        <div className="flex justify-between items-center mb-6">
-          <Link href="/" className="inline-flex items-center text-amber-700 hover:text-amber-900 font-medium text-sm">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-5 print:hidden">
+          <Link href="/" className="inline-flex items-center text-amber-700 hover:text-amber-900 font-medium text-xs sm:text-sm">
             ← হোমে ফিরে যান
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={() => window.print()}
+              title="তালিকাটি প্রিন্ট বা PDF হিসেবে সেভ করুন"
+              className="text-[11px] sm:text-xs bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold transition flex items-center gap-1 shadow-2xs"
+            >
+              <span>🖨️</span> প্রিন্ট / PDF
+            </button>
+
             {isAdmin ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <a
                   href={GOOGLE_SHEET_EDIT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                  className="text-[11px] sm:text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 sm:px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
                 >
-                  <span>📊</span> শিটে হিসাব এডিট করুন
+                  <span>📊</span> শিট এডিট
                 </a>
                 <button
                   onClick={() => setIsAdmin(false)}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
+                  className="text-[11px] sm:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1.5 rounded-full"
                 >
                   লগআউট
                 </button>
@@ -124,7 +179,7 @@ export default function PronamiPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs text-amber-800 hover:text-amber-950 bg-amber-100/80 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition"
+                className="text-[11px] sm:text-xs text-amber-800 hover:text-amber-950 bg-amber-100/80 border border-amber-300 px-2.5 sm:px-3 py-1.5 rounded-full font-semibold transition"
               >
                 🔒 অ্যাডমিন
               </button>
@@ -134,46 +189,54 @@ export default function PronamiPage() {
               onClick={fetchGoogleSheetData}
               disabled={isLoading}
               title="নতুন ডাটা লোড করতে ক্লিক করুন"
-              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+              className="text-[11px] sm:text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2.5 sm:px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
             >
-              <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
+              <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? '...' : 'রিফ্রেশ'}
             </button>
           </div>
         </div>
 
         {/* হেডার ব্যানার */}
-        <div className="bg-gradient-to-r from-amber-600 to-red-600 text-white p-6 rounded-2xl shadow-md mb-8">
-          <div className="flex items-center gap-2">
-            <span className="bg-amber-800/60 text-yellow-200 text-xs px-2.5 py-1 rounded font-bold">হিসাব-নিকাশ</span>
-            <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+        <div className="bg-gradient-to-r from-amber-600 to-red-600 text-white p-5 md:p-8 rounded-3xl shadow-md mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 print:hidden">
+              <span className="bg-amber-800/60 text-yellow-200 text-[11px] px-2.5 py-0.5 rounded font-bold">হিসাব-নিকাশ</span>
+              <span className="bg-green-500/80 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ শিট
+              </span>
+            </div>
+            <span className="text-[11px] text-amber-200 font-semibold">
+              নবজাগরণ একতা সংঘ
             </span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার প্রণামী ও চাঁদার খাতা</h1>
-          <p className="text-amber-100 text-sm mt-2">
-            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ হিসাব দেখানো হচ্ছে।
+          
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold mt-2">
+            নবীন মহাজন পাড়া — {selectedPuja} ({selectedYear})
+          </h1>
+          <p className="text-amber-100 text-xs sm:text-sm mt-1">
+            পূজার প্রণামী ও চাঁদা আদায়ের পূর্ণাঙ্গ খাতা
           </p>
         </div>
 
         {/* মূল বক্স */}
-        <div className="bg-white rounded-2xl shadow border border-gray-100 p-5">
+        <div className="bg-white rounded-2xl shadow border border-gray-100 p-3 sm:p-5 md:p-6">
           
           {/* ফিল্টার */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-4 border-b print:hidden">
             <div>
-              <h2 className="text-lg font-bold text-gray-800">📋 প্রণামীর তালিকা</h2>
+              <h2 className="text-base sm:text-lg font-bold text-gray-800">📋 প্রণামীর তালিকা</h2>
               <p className="text-xs text-gray-500">
                 পূজা ও বছর নির্বাচন করে যেকোনো সদস্যের হিসাব দেখুন।
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              <div className="flex items-center gap-1 flex-1 sm:flex-initial">
                 <span className="text-xs font-semibold text-gray-600">পূজা:</span>
                 <select
                   value={selectedPuja}
                   onChange={(e) => setSelectedPuja(e.target.value)}
-                  className="bg-gray-100 border border-gray-300 text-xs md:text-sm rounded-lg p-2 font-medium outline-none"
+                  className="w-full bg-gray-100 border border-gray-300 text-xs sm:text-sm rounded-lg p-1.5 sm:p-2 font-medium outline-none"
                 >
                   {pujas.map((p, idx) => (
                     <option key={idx} value={p}>{p}</option>
@@ -186,7 +249,7 @@ export default function PronamiPage() {
                 <select
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="bg-gray-100 border border-gray-300 text-xs md:text-sm rounded-lg p-2 font-medium outline-none"
+                  className="bg-gray-100 border border-gray-300 text-xs sm:text-sm rounded-lg p-1.5 sm:p-2 font-medium outline-none"
                 >
                   {years.map((y) => (
                     <option key={y} value={y}>{y}</option>
@@ -197,46 +260,45 @@ export default function PronamiPage() {
           </div>
 
           {/* সামারি কার্ড */}
-          <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-              <div className="text-[11px] md:text-xs text-blue-700 font-semibold">ধার্য / দেওয়ার কথা</div>
-              <div className="text-lg md:text-xl font-bold text-blue-800 mt-1">{totalPledged} ৳</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-5">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 sm:p-3 text-center">
+              <div className="text-[10px] sm:text-xs text-blue-700 font-semibold">ধার্য টাকা</div>
+              <div className="text-base sm:text-xl font-bold text-blue-800 mt-0.5">{totalPledged} ৳</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-              <div className="text-[11px] md:text-xs text-green-700 font-semibold">মোট আদায় হয়েছে</div>
-              <div className="text-lg md:text-xl font-bold text-green-800 mt-1">{totalPaid} ৳</div>
+            <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 sm:p-3 text-center">
+              <div className="text-[10px] sm:text-xs text-green-700 font-semibold">মোট আদায়</div>
+              <div className="text-base sm:text-xl font-bold text-green-800 mt-0.5">{totalPaid} ৳</div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-              <div className="text-[11px] md:text-xs text-red-700 font-semibold">মোট বকেয়া</div>
-              <div className="text-lg md:text-xl font-bold text-red-800 mt-1">{totalDue} ৳</div>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-3 text-center">
+              <div className="text-[10px] sm:text-xs text-red-700 font-semibold">মোট বকেয়া</div>
+              <div className="text-base sm:text-xl font-bold text-red-800 mt-0.5">{totalDue} ৳</div>
             </div>
           </div>
 
           {/* 🔍 লাইভ সার্চ বার */}
-          <div className="relative mb-5">
+          <div className="relative mb-4 print:hidden">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
               🔍
             </span>
             <input
               type="text"
-              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
+              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, নয়ন, দিপক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
+              className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
-                title="সার্চ ক্লিয়ার করুন"
               >
                 ✕
               </button>
             )}
           </div>
 
-          {/* তালিকা টেবিল (টাকার চিহ্ন ৳ সরিয়ে শুধু খাঁটি সংখ্যা রাখা হলো) */}
-          <div className="overflow-x-auto">
+          {/* টেবিল */}
+          <div className="w-full">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
                 <span className="text-2xl animate-spin">⏳</span>
@@ -244,21 +306,21 @@ export default function PronamiPage() {
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : (
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-100 text-gray-700 text-xs uppercase">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-100 text-gray-700 text-[11px] sm:text-xs uppercase">
                   <tr>
-                    <th className="py-2.5 px-3 w-10 text-center">#</th>
-                    <th className="py-2.5 px-3">নাম</th>
-                    <th className="py-2.5 px-3 text-right">ধার্য টাকা</th>
-                    <th className="py-2.5 px-3 text-right">দিয়েছে</th>
-                    <th className="py-2.5 px-3 text-right">বকেয়া</th>
-                    <th className="py-2.5 px-3 text-center">স্ট্যাটাস</th>
+                    <th className="py-2.5 px-1 sm:px-3 w-7 sm:w-10 text-center">#</th>
+                    <th className="py-2.5 px-1.5 sm:px-3">নাম</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-right">ধার্য</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-right">দিয়েছে</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-right">বকেয়া</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-center">স্ট্যাটাস</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 text-xs sm:text-sm">
                   {filteredRecords.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="py-8 text-center text-gray-400 text-sm">
@@ -273,31 +335,28 @@ export default function PronamiPage() {
 
                       return (
                         <tr key={r.id} className="hover:bg-gray-50">
-                          <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
-                          <td className="py-3 px-3 font-semibold text-gray-800">{r.name}</td>
-                          
-                          {/* ধার্য টাকা (৳ চিহ্ন ছাড়া) */}
-                          <td className="py-3 px-3 text-right font-medium text-gray-600">
+                          <td className="py-2.5 px-1 sm:px-3 text-center text-gray-400 text-[11px] sm:text-xs">
+                            {index + 1}
+                          </td>
+                          <td className="py-2.5 px-1.5 sm:px-3 font-semibold text-gray-800 leading-tight">
+                            {r.name}
+                          </td>
+                          <td className="py-2.5 px-1 sm:px-3 text-right font-medium text-gray-600">
                             {r.pledged > 0 ? r.pledged : '—'}
                           </td>
-                          
-                          {/* দিয়েছে টাকা (৳ চিহ্ন ছাড়া) */}
-                          <td className="py-3 px-3 text-right font-bold text-green-700">
+                          <td className="py-2.5 px-1 sm:px-3 text-right font-bold text-green-700">
                             {r.paid}
                           </td>
-                          
-                          {/* বকেয়া টাকা (৳ চিহ্ন ছাড়া) */}
-                          <td className="py-3 px-3 text-right font-bold text-red-600">
+                          <td className="py-2.5 px-1 sm:px-3 text-right font-bold text-red-600">
                             {due > 0 ? due : '০'}
                           </td>
-                          
-                          <td className="py-3 px-3 text-center">
+                          <td className="py-2.5 px-1 sm:px-3 text-center whitespace-nowrap">
                             {due <= 0 && r.pledged > 0 ? (
-                              <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
+                              <span className="bg-green-100 text-green-700 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
                                 ✓ পরিশোধিত
                               </span>
                             ) : (
-                              <span className="bg-red-100 text-red-600 text-xs font-bold px-2.5 py-1 rounded-full">
+                              <span className="bg-red-100 text-red-600 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
                                 {r.paid > 0 ? `বাকি ${due}` : '✕ বকেয়া'}
                               </span>
                             )}
@@ -314,7 +373,7 @@ export default function PronamiPage() {
         </div>
       </div>
 
-      {/* অ্যাডমিন পিন কোড ইনপুট মডাল */}
+      {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">

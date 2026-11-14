@@ -39,7 +39,7 @@ export default function SmaranikaPage() {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(GOOGLE_SHEET_CSV_URL);
+      const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
       const csvText = await response.text();
 
       const lines = csvText.trim().split(/\r?\n/);
