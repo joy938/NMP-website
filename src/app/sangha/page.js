@@ -6,14 +6,12 @@ import Navbar from '../../components/Navbar';
 export default function SanghaPage() {
   const ADMIN_PIN = '0000';
   
-  // তোমার মাসিক চাঁদার গুগল শিট লিংক
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/edit?usp=sharing';
 
   const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
 
-  // স্বয়ংক্রিয়ভাবে বর্তমান মাস ও বছর বের করার স্মার্ট কোড
   const currentMonthName = months[new Date().getMonth()];
   const currentYearNumber = new Date().getFullYear();
 
@@ -21,13 +19,11 @@ export default function SanghaPage() {
   const [selectedYear, setSelectedYear] = useState(currentYearNumber);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // অ্যাডমিন স্টেট
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // ডাটা ও লোডিং স্টেট
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -146,18 +142,25 @@ export default function SanghaPage() {
           </div>
         </div>
 
-        {/* হেডার */}
-        <div className="bg-red-700 text-white p-6 rounded-2xl shadow-md mb-8">
-          <div className="flex items-center gap-2">
-            <span className="bg-red-800 text-amber-200 text-xs px-2.5 py-1 rounded font-bold">আমাদের সংগঠন</span>
-            <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
-            </span>
+        {/* হেডার (লোগো সহ) */}
+        <div className="bg-red-700 text-white p-5 sm:p-6 rounded-2xl shadow-md mb-8 flex items-center gap-4">
+          <img
+            src="/logo.png"
+            alt="নবজাগরণ একতা সংঘ লোগো"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white p-1 shadow-md object-contain shrink-0"
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="bg-red-800 text-amber-200 text-xs px-2.5 py-1 rounded font-bold">আমাদের সংগঠন</span>
+              <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+              </span>
+            </div>
+            <h1 className="text-xl sm:text-3xl font-extrabold mt-2">নবজাগরণ একতা সংঘ</h1>
+            <p className="text-red-100 text-xs sm:text-sm mt-1">
+              নবীন মহাজন পাড়ার সকল পূজা ও সামাজিক উন্নয়নমূলক কাজ এই সংগঠনের মাধ্যমেই পরিচালিত হয়।
+            </p>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">নবজাগরণ একতা সংঘ</h1>
-          <p className="text-red-100 text-sm mt-2">
-            নবীন মহাজন পাড়ার সকল পূজা ও সামাজিক উন্নয়নমূলক কাজ এই সংগঠনের মাধ্যমেই পরিচালিত হয়।
-          </p>
         </div>
 
         {/* চাঁদার হিসাব ও তালিকা */}
@@ -219,7 +222,7 @@ export default function SanghaPage() {
             </span>
             <input
               type="text"
-              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, জয়, শেখর)..."
+              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -243,7 +246,7 @@ export default function SanghaPage() {
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : (
               <table className="w-full text-left text-sm">

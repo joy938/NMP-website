@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
-// বাংলা সংখ্যা (৫০০) বা কমা (1,000) থাকলে স্বয়ংক্রিয়ভাবে ইংরেজি সংখ্যায় রূপান্তর
 const toNumber = (str) => {
   if (!str) return 0;
   const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -87,7 +86,6 @@ export default function PronamiPage() {
 
       setRecords(parsedRecords);
 
-      // আসন্ন পূজা শিট ও বর্তমান শিটের সব পূজা মিলিয়ে অটো সিলেক্ট
       if (upcomingPujaName) {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedRecords.map((r) => r.puja).filter(Boolean)])
@@ -119,7 +117,6 @@ export default function PronamiPage() {
     }
   };
 
-  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ড্রপডাউনে আসবে
   const pujas = Array.from(
     new Set([...defaultPujas, ...records.map((r) => r.puja).filter(Boolean)])
   );
@@ -137,12 +134,21 @@ export default function PronamiPage() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
+   <main className="min-h-screen bg-gray-50 print:bg-transparent text-gray-800 relative">
       <div className="print:hidden">
         <Navbar />
       </div>
 
-      <div className="max-w-4xl mx-auto py-6 md:py-8 px-2.5 sm:px-4">
+      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
+      <div className="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none z-0">
+        <img
+          src="/logo.png"
+          alt="Watermark"
+          className="w-80 h-80 object-contain opacity-15"
+        />
+      </div>
+
+      <div className="max-w-4xl mx-auto py-6 md:py-8 px-2.5 sm:px-4 relative z-10">
         
         {/* টপ বার */}
         <div className="flex flex-wrap justify-between items-center gap-2 mb-5 print:hidden">
@@ -219,7 +225,7 @@ export default function PronamiPage() {
         </div>
 
         {/* মূল বক্স */}
-        <div className="bg-white rounded-2xl shadow border border-gray-100 p-3 sm:p-5 md:p-6">
+       <div className="bg-white/95 print:bg-transparent rounded-2xl shadow print:shadow-none border border-gray-100 p-3 sm:p-5 md:p-6">
           
           {/* ফিল্টার */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-4 border-b print:hidden">
@@ -261,15 +267,15 @@ export default function PronamiPage() {
 
           {/* সামারি কার্ড */}
           <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-5">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 sm:p-3 text-center">
+            <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-2.5 sm:p-3 text-center">
               <div className="text-[10px] sm:text-xs text-blue-700 font-semibold">ধার্য টাকা</div>
               <div className="text-base sm:text-xl font-bold text-blue-800 mt-0.5">{totalPledged} ৳</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-xl p-2.5 sm:p-3 text-center">
+            <div className="bg-green-50/90 border border-green-200 rounded-xl p-2.5 sm:p-3 text-center">
               <div className="text-[10px] sm:text-xs text-green-700 font-semibold">মোট আদায়</div>
               <div className="text-base sm:text-xl font-bold text-green-800 mt-0.5">{totalPaid} ৳</div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-3 text-center">
+            <div className="bg-red-50/90 border border-red-200 rounded-xl p-2.5 sm:p-3 text-center">
               <div className="text-[10px] sm:text-xs text-red-700 font-semibold">মোট বকেয়া</div>
               <div className="text-base sm:text-xl font-bold text-red-800 mt-0.5">{totalDue} ৳</div>
             </div>
@@ -282,7 +288,7 @@ export default function PronamiPage() {
             </span>
             <input
               type="text"
-              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, নয়ন, দিপক)..."
+              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
@@ -310,7 +316,7 @@ export default function PronamiPage() {
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-100 text-gray-700 text-[11px] sm:text-xs uppercase">
+                <thead className="bg-gray-100/90 text-gray-700 text-[11px] sm:text-xs uppercase">
                   <tr>
                     <th className="py-2.5 px-1 sm:px-3 w-7 sm:w-10 text-center">#</th>
                     <th className="py-2.5 px-1.5 sm:px-3">নাম</th>

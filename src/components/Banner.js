@@ -11,17 +11,24 @@ export default function Banner() {
           ঐক্য, ঐতিহ্য ও ভ্রাতৃত্বের মেলবন্ধন — আমাদের সকল পূজা ও সামাজিক আয়োজনের তথ্য একসাথে।
         </p>
 
-        {/* ব্যানারেই থাকা ৩টি অপশন কার্ড (মসৃণ হোভার ও প্রেস এফেক্ট সহ) */}
+        {/* ব্যানারেই থাকা ৩টি অপশন কার্ড */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto text-left">
           
-          {/* অপশন ১: নবজাগরণ একতা সংঘ */}
+          {/* অপশন ১: নবজাগরণ একতা সংঘ (লোগো সহ) */}
           <Link 
             href="/sangha" 
             className="bg-white text-gray-800 p-5 rounded-2xl shadow-md hover:shadow-2xl hover:-translate-y-2 active:scale-95 transition-all duration-300 border-t-4 border-red-600 flex flex-col justify-between group cursor-pointer"
           >
             <div>
-              <span className="text-xs bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-md">সংগঠন</span>
-              <h3 className="text-lg font-bold text-red-700 mt-2.5 group-hover:text-red-800 transition">
+              <div className="flex items-center justify-between">
+                <span className="text-xs bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-md">সংগঠন</span>
+                <img 
+                  src="/logo.png" 
+                  alt="নবজাগরণ একতা সংঘ লোগো" 
+                  className="w-10 h-10 rounded-full object-contain border border-red-100 shadow-2xs" 
+                />
+              </div>
+              <h3 className="text-lg font-bold text-red-700 mt-2 group-hover:text-red-800 transition">
                 নবজাগরণ একতা সংঘ
               </h3>
               <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">

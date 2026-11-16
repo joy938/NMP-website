@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 
-// বাংলা সংখ্যা (৫০০) বা কমা (1,000) থাকলে স্বয়ংক্রিয়ভাবে ইংরেজি সংখ্যায় রূপান্তর
 const toNumber = (str) => {
   if (!str) return 0;
   const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -139,7 +138,6 @@ export default function ExpensesPage() {
     }
   };
 
-  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ড্রপডাউনে আসবে
   const pujas = Array.from(
     new Set([...defaultPujas, ...expenses.map((e) => e.puja).filter(Boolean)])
   );
@@ -162,12 +160,21 @@ export default function ExpensesPage() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
+    <main className="min-h-screen bg-gray-50 text-gray-800 relative">
       <div className="print:hidden">
         <Navbar />
       </div>
 
-      <div className="max-w-4xl mx-auto py-6 md:py-8 px-2.5 sm:px-4">
+      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
+      <div className="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none z-0">
+        <img
+          src="/logo.png"
+          alt="Watermark"
+          className="w-80 h-80 object-contain opacity-15"
+        />
+      </div>
+
+      <div className="max-w-4xl mx-auto py-6 md:py-8 px-2.5 sm:px-4 relative z-10">
         
         {/* টপ বার */}
         <div className="flex flex-wrap justify-between items-center gap-2 mb-5 print:hidden">
@@ -244,7 +251,7 @@ export default function ExpensesPage() {
         </div>
 
         {/* মূল বক্স */}
-        <div className="bg-white rounded-2xl shadow border border-gray-100 p-3 sm:p-5 md:p-6">
+        <div className="bg-white/95 rounded-2xl shadow border border-gray-100 p-3 sm:p-5 md:p-6">
           
           {/* ফিল্টার */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-4 border-b print:hidden">
@@ -287,14 +294,14 @@ export default function ExpensesPage() {
           {/* ৩টি কার্ড */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
             
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-2.5 sm:p-4 text-center">
+            <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-2.5 sm:p-4 text-center">
               <span className="text-[10px] sm:text-xs text-blue-700 font-bold uppercase block">মোট আদায়</span>
               <div className="text-base sm:text-2xl font-black text-blue-900 mt-0.5">
                 {totalIncome} ৳
               </div>
             </div>
 
-            <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-4 text-center">
+            <div className="bg-red-50/90 border border-red-200 rounded-xl p-2.5 sm:p-4 text-center">
               <span className="text-[10px] sm:text-xs text-red-700 font-bold uppercase block">মোট খরচ</span>
               <div className="text-base sm:text-2xl font-black text-red-900 mt-0.5">
                 {totalExpense} ৳
@@ -303,8 +310,8 @@ export default function ExpensesPage() {
 
             <div className={`rounded-xl p-2.5 sm:p-4 text-center border ${
               netBalance >= 0 
-                ? 'bg-green-50 border-green-200' 
-                : 'bg-amber-50 border-amber-300'
+                ? 'bg-green-50/90 border-green-200' 
+                : 'bg-amber-50/90 border-amber-300'
             }`}>
               <span className={`text-[10px] sm:text-xs font-bold uppercase block ${
                 netBalance >= 0 ? 'text-green-700' : 'text-amber-800'
@@ -355,7 +362,7 @@ export default function ExpensesPage() {
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
-                <thead className="bg-gray-100 text-gray-700 text-[11px] sm:text-xs uppercase">
+                <thead className="bg-gray-100/90 text-gray-700 text-[11px] sm:text-xs uppercase">
                   <tr>
                     <th className="py-2.5 px-1 sm:px-3 w-7 sm:w-10 text-center">#</th>
                     <th className="py-2.5 px-1.5 sm:px-3">খরচের বিবরণ / খাত</th>
