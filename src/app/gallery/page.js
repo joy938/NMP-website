@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
+import Loader from '@/components/Loader';
 
 // গুগল ড্রাইভের জন্য সবচেয়ে নির্ভরযোগ্য হাই-স্পিড ইমেজ লিংক কনভার্টার
 const formatImageUrl = (url) => {
@@ -175,8 +176,8 @@ export default function GalleryPage() {
         {/* ছবি গ্রিড */}
         {isLoading ? (
           <div className="py-20 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-            <span className="text-3xl animate-spin">⏳</span>
-            <span>ছবি লোড হচ্ছে...</span>
+            {/* <span className="text-3xl animate-spin">⏳</span> */}
+          <Loader/>
           </div>
         ) : isError ? (
           <div className="py-12 text-center text-red-600 text-sm">

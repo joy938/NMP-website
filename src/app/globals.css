@@ -12,11 +12,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@import "tailwindcss";
+
+body {
+  background-color: #fef3c7;
+  background-image: radial-gradient(rgba(180, 83, 9, 0.28) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+  color: #171717;
 }
 
 body {

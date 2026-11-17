@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
+import Loader from '@/components/Loader';
 
 export default function SchedulePage() {
   const ADMIN_PIN = '0000';
@@ -245,8 +246,8 @@ export default function SchedulePage() {
           <div className="space-y-3">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                <span className="text-2xl animate-spin">⏳</span>
-                <span>গুগল শিট থেকে সময়সূচী লোড হচ্ছে...</span>
+                {/* <span className="text-2xl animate-spin">⏳</span> */}
+            <Loader/>
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">

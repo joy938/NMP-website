@@ -2,17 +2,73 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
+import Loader from '@/components/Loader';
 
-// গুগল ড্রাইভ লিংককে স্বয়ংক্রিয়ভাবে সরাসরি ছবিতে রূপান্তর করার ফাংশন
+// গুগল ড্রাইভ লিংককে স্বয়ংক্রিয়ভাবে সরাসরি ছবিতে রূপান্তর করার ফাংশন
 const formatImageUrl = (url) => {
   if (!url) return '';
   const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
   const match = url.match(driveRegex);
   if (match && match[1]) {
-    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
+    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
   }
   return url;
+};
+
+// বাংলা সংখ্যাকে ইংরেজিতে রূপান্তর
+const toEnglishDigits = (str) => {
+  const bn = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
+  return String(str).replace(/[০-৯]/g, (d) => bn[d]);
+};
+
+// প্রয়াণের তারিখ আজকের তারিখের সাথে মিলছে কি না তা যাচাই
+const isTodayAnniversary = (dateStr, today) => {
+  if (!dateStr || !today) return false;
+
+  const clean = toEnglishDigits(dateStr).normalize('NFC').toLowerCase();
+  const todayDay = today.getDate();
+  const todayMonth = today.getMonth();
+
+  const monthGroups = [
+    ['জানুয়ারি', 'জানুয়ারি', 'january', 'jan'],
+    ['ফেব্রুয়ারি', 'ফেব্রুয়ারি', 'february', 'feb'],
+    ['মার্চ', 'march', 'mar'],
+    ['এপ্রিল', 'april', 'apr'],
+    ['মে', 'may'],
+    ['জুন', 'june', 'jun'],
+    ['জুলাই', 'july', 'jul'],
+    ['আগস্ট', 'august', 'aug'],
+    ['সেপ্টেম্বর', 'september', 'sep'],
+    ['অক্টোবর', 'october', 'oct'],
+    ['নভেম্বর', 'november', 'nov'],
+    ['ডিসেম্বর', 'december', 'dec'],
+  ];
+
+  let matchedMonth = -1;
+  for (let i = 0; i < monthGroups.length; i++) {
+    if (monthGroups[i].some((m) => clean.includes(m.normalize('NFC')))) {
+      matchedMonth = i;
+      break;
+    }
+  }
+
+  if (matchedMonth !== -1) {
+    const nums = clean.match(/\b\d{1,2}\b/g);
+    if (nums && nums.length > 0) {
+      const day = parseInt(nums[0], 10);
+      return day === todayDay && matchedMonth === todayMonth;
+    }
+  }
+
+  const slashMatch = clean.match(/(\d{1,2})[\/\-](\d{1,2})/);
+  if (slashMatch) {
+    const day = parseInt(slashMatch[1], 10);
+    const month = parseInt(slashMatch[2], 10) - 1;
+    return day === todayDay && month === todayMonth;
+  }
+
+  return false;
 };
 
 export default function SmaranikaPage() {
@@ -25,6 +81,7 @@ export default function SmaranikaPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [litDiyas, setLitDiyas] = useState({});
+  const [today, setToday] = useState(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -66,7 +123,7 @@ export default function SmaranikaPage() {
 
       setSouls(parsed);
     } catch (error) {
-      console.error('স্মরণিকা লোড করতে সমস্যা হয়েছে:', error);
+      console.error('স্মরণিকা লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -74,6 +131,7 @@ export default function SmaranikaPage() {
   };
 
   useEffect(() => {
+    setToday(new Date());
     fetchSmaranikaData();
 
     const savedDiyas = localStorage.getItem('lit_diyas_status');
@@ -172,7 +230,7 @@ export default function SmaranikaPage() {
             স্মরণিকা
           </h1>
           <p className="text-amber-200/90 text-sm md:text-base mt-2 font-medium">
-            স্মৃতিপটে অম্লান — যাঁদের স্নেহ, আদর্শ ও স্মৃতি আমাদের হৃদয়ে চিরভাস্বর
+            স্মৃতিপটে অম্লান — যাঁদের স্নেহ, আদর্শ ও স্মৃতি আমাদের হৃদয়ে চিরভাস্বর
           </p>
           <div className="mt-4 pt-3 border-t border-stone-700/60 max-w-lg mx-auto">
             <p className="text-stone-300 text-xs italic">
@@ -220,7 +278,7 @@ export default function SmaranikaPage() {
               </span>
               <input
                 type="text"
-                placeholder="নাম দিয়ে খুঁজুন..."
+                placeholder="নাম দিয়ে খুঁজুন..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-8 py-1.5 text-xs border border-stone-300 rounded-xl outline-none focus:border-amber-600 bg-stone-50/50"
@@ -241,32 +299,46 @@ export default function SmaranikaPage() {
         {/* স্মরণিকা কার্ড গ্রিড */}
         {isLoading ? (
           <div className="py-16 text-center text-stone-500 text-sm flex flex-col items-center gap-2">
-            <span className="text-2xl animate-spin">⏳</span>
-            <span>গুগল শিট থেকে স্মরণিকা লোড হচ্ছে...</span>
+            {/* <span className="text-2xl animate-spin">⏳</span> */}
+         <Loader/>
           </div>
         ) : isError ? (
           <div className="py-12 text-center text-red-600 text-sm">
-            গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+            গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
           </div>
         ) : filteredSouls.length === 0 ? (
           <div className="bg-white p-12 text-center text-stone-400 rounded-2xl border border-stone-200 text-sm">
             {searchQuery
-              ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
+              ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
               : `এই বছরে কোনো রেকর্ড যুক্ত নেই। গুগল শিটে নাম লিখলে এখানে চলে আসবে।`}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {filteredSouls.map((soul) => {
               const isLit = litDiyas[soul.id] || false;
+              const isAnniversary = isTodayAnniversary(soul.date, today);
 
               return (
                 <div
                   key={soul.id}
-                  className="bg-white rounded-2xl p-5 border border-amber-200/70 shadow-sm hover:shadow-md transition flex flex-col justify-between text-center relative overflow-hidden group"
+                  className={`bg-white rounded-2xl p-5 border shadow-sm hover:shadow-md transition flex flex-col justify-between text-center relative overflow-hidden group ${
+                    isAnniversary
+                      ? 'border-amber-400 ring-2 ring-amber-300/70'
+                      : 'border-amber-200/70'
+                  }`}
                 >
                   <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-amber-600 to-amber-400"></div>
 
                   <div>
+                    {/* আজ প্রয়াণ বার্ষিকী হলে বিশেষ ব্যাজ */}
+                    {isAnniversary && (
+                      <div className="mb-2.5 flex justify-center">
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold px-2.5 py-0.5 rounded-full animate-pulse">
+                          🕯️ আজ পুণ্য স্মরণ দিবস
+                        </span>
+                      </div>
+                    )}
+
                     {/* ছবি অথবা প্রদীপের ফ্রেম (গুগল ড্রাইভ লিংক দিলে ছবি দেখাবে) */}
                     <div className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden relative">
                       {soul.photoUrl ? (
@@ -275,7 +347,7 @@ export default function SmaranikaPage() {
                           alt={soul.name}
                           className="w-full h-full object-cover rounded-full"
                           onError={(e) => {
-                            // যদি লিংকে সমস্যা হয় তবে ব্রোকেন ছবি না দেখিয়ে প্রদীপ দেখাবে
+                            // যদি লিংকে সমস্যা হয় তবে ব্রোকেন ছবি না দেখিয়ে প্রদীপ দেখাবে
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.parentElement.innerHTML = '<span class="text-3xl">🪔</span>';
                           }}
@@ -290,9 +362,9 @@ export default function SmaranikaPage() {
                       {soul.name}
                     </h3>
 
-                    {/* প্রয়াণের তারিখ */}
+                    {/* প্রয়াণের তারিখ */}
                     <p className="text-xs text-stone-600 mt-1 font-medium">
-                      প্রয়াণ: <span className="text-stone-800 font-semibold">{soul.date}</span>
+                      প্রয়াণ: <span className="text-stone-800 font-semibold">{soul.date}</span>
                     </p>
                   </div>
 

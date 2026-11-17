@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
+import Loader from '@/components/Loader';
 
 export default function SanghaPage() {
   const ADMIN_PIN = '0000';
@@ -241,8 +242,8 @@ export default function SanghaPage() {
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                <span className="text-2xl animate-spin">⏳</span>
-                <span>গুগল শিট থেকে চাঁদার হিসাব লোড হচ্ছে...</span>
+                {/* <span className="text-2xl animate-spin">⏳</span> */}
+              <Loader text="হিসাব লোড হচ্ছে..." />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
@@ -271,7 +272,7 @@ export default function SanghaPage() {
                       const isPaid = member.status.includes('পরিশোধিত');
 
                       return (
-                        <tr key={member.id} className="hover:bg-gray-50">
+                     <tr key={index} className="even:bg-orange-100/50 hover:bg-orange-100 transition-colors">
                           <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
                           <td className="py-3 px-3 font-semibold text-gray-800">{member.name}</td>
                           <td className="py-3 px-3 text-center">

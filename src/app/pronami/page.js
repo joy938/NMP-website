@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
-
+import Loader from '@/components/Loader';
 const toNumber = (str) => {
   if (!str) return 0;
   const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -307,8 +307,8 @@ export default function PronamiPage() {
           <div className="w-full">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                <span className="text-2xl animate-spin">⏳</span>
-                <span>গুগল শিট থেকে লাইভ হিসাব লোড হচ্ছে...</span>
+                {/* <span className="text-2xl animate-spin">⏳</span> */}
+               <Loader text="হিসাব লোড হচ্ছে..." />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">

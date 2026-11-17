@@ -1,14 +1,87 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+const getBanglaAndEnglishDate = (date) => {
+  const banglaDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  const toBn = (num) => String(num).replace(/\d/g, (d) => banglaDigits[d]);
+
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  const isAfterPohelaBoishakh = month > 4 || (month === 4 && day >= 14);
+  const bnYear = isAfterPohelaBoishakh ? year - 593 : year - 594;
+
+  const boishakhStart = new Date(isAfterPohelaBoishakh ? year : year - 1, 3, 14);
+  const current = new Date(year, month - 1, day);
+  const diffDays = Math.floor((current - boishakhStart) / (1000 * 60 * 60 * 24));
+
+  const falgunGregorianYear = isAfterPohelaBoishakh ? year + 1 : year;
+  const isLeap =
+    (falgunGregorianYear % 4 === 0 && falgunGregorianYear % 100 !== 0) ||
+    falgunGregorianYear % 400 === 0;
+
+  const bnMonths = [
+    { name: 'বৈশাখ', days: 31 },
+    { name: 'জ্যৈষ্ঠ', days: 31 },
+    { name: 'আষাঢ়', days: 31 },
+    { name: 'শ্রাবণ', days: 31 },
+    { name: 'ভাদ্র', days: 31 },
+    { name: 'আশ্বিন', days: 31 },
+    { name: 'কার্তিক', days: 30 },
+    { name: 'অগ্রহায়ণ', days: 30 },
+    { name: 'পৌষ', days: 30 },
+    { name: 'মাঘ', days: 30 },
+    { name: 'ফাল্গুন', days: isLeap ? 30 : 29 },
+    { name: 'চৈত্র', days: 30 },
+  ];
+
+  let remaining = diffDays;
+  let bnMonthName = 'বৈশাখ';
+  let bnDay = 1;
+
+  for (const m of bnMonths) {
+    if (remaining < m.days) {
+      bnMonthName = m.name;
+      bnDay = remaining + 1;
+      break;
+    }
+    remaining -= m.days;
+  }
+
+  const engMonthsBn = [
+    'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
+    'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
+  ];
+
+  return `${toBn(bnDay)} ${bnMonthName}, ${toBn(bnYear)} • ${toBn(day)} ${engMonthsBn[month - 1]}, ${toBn(year)}`;
+};
+
 export default function Banner() {
+  const [todayText, setTodayText] = useState('');
+
+  useEffect(() => {
+    setTodayText(getBanglaAndEnglishDate(new Date()));
+  }, []);
+
   return (
     <div id="home" className="bg-gradient-to-b from-red-600 to-amber-600 text-white py-14 px-4 text-center">
       <div className="max-w-5xl mx-auto">
+        {todayText && (
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 text-amber-50 text-xs font-medium px-3.5 py-1 rounded-full">
+              📅 {todayText}
+            </span>
+          </div>
+        )}
+
         <h1 className="text-3xl md:text-5xl font-extrabold mb-3">
-          নবীন মহাজন পাড়া
+          নবীন মহাজন পাড়া
         </h1>
         <p className="text-base md:text-lg text-amber-100 max-w-xl mx-auto mb-8">
-          ঐক্য, ঐতিহ্য ও ভ্রাতৃত্বের মেলবন্ধন — আমাদের সকল পূজা ও সামাজিক আয়োজনের তথ্য একসাথে।
+          ঐক্য, ঐতিহ্য ও ভ্রাতৃত্বের মেলবন্ধন — আমাদের সকল পূজা ও সামাজিক আয়োজনের তথ্য একসাথে।
         </p>
 
         {/* ব্যানারেই থাকা ৩টি অপশন কার্ড */}
@@ -32,7 +105,7 @@ export default function Banner() {
                 নবজাগরণ একতা সংঘ
               </h3>
               <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
-                আমাদের পাড়ার সংগঠন — যার মাধ্যমে সকল পূজা ও অনুষ্ঠান পরিচালিত হয়।
+                আমাদের পাড়ার সংগঠন — যার মাধ্যমে সকল পূজা ও অনুষ্ঠান পরিচালিত হয়।
               </p>
             </div>
             <div className="mt-4 text-red-600 font-bold text-xs flex items-center group-hover:translate-x-1 transition duration-200">
@@ -46,12 +119,12 @@ export default function Banner() {
             className="bg-white text-gray-800 p-5 rounded-2xl shadow-md hover:shadow-2xl hover:-translate-y-2 active:scale-95 transition-all duration-300 border-t-4 border-amber-500 flex flex-col justify-between group cursor-pointer"
           >
             <div>
-              <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-md">আদায় / চাঁদা</span>
+              <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-md">আদায় / চাঁদা</span>
               <h3 className="text-lg font-bold text-amber-700 mt-2.5 group-hover:text-amber-800 transition">
                 পূজার প্রণামী
               </h3>
               <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
-                কে কোন পূজায় কত টাকা দিল এবং বকেয়ার স্বচ্ছ ও নির্ভুল তালিকা।
+                কে কোন পূজায় কত টাকা দিল এবং বকেয়ার স্বচ্ছ ও নির্ভুল তালিকা।
               </p>
             </div>
             <div className="mt-4 text-amber-600 font-bold text-xs flex items-center group-hover:translate-x-1 transition duration-200">
@@ -65,7 +138,7 @@ export default function Banner() {
             className="bg-white text-gray-800 p-5 rounded-2xl shadow-md hover:shadow-2xl hover:-translate-y-2 active:scale-95 transition-all duration-300 border-t-4 border-purple-600 flex flex-col justify-between group cursor-pointer"
           >
             <div>
-              <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-md">ব্যয়-বিবরণ</span>
+              <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2.5 py-1 rounded-md">ব্যয়-বিবরণ</span>
               <h3 className="text-lg font-bold text-purple-700 mt-2.5 group-hover:text-purple-800 transition">
                 পূজার খরচের বিস্তারিত
               </h3>
