@@ -71,7 +71,7 @@ export default function Banner() {
       <div className="max-w-5xl mx-auto">
         {todayText && (
           <div className="mb-3">
-            <span className="inline-flex items-center gap-1.5 bg-white/15 border border-white/25 text-amber-50 text-xs font-medium px-3.5 py-1 rounded-full">
+            <span className="inline-flex items-center gap-1.5 bg-white/95 border border-amber-200 text-red-700 text-xs font-bold px-3.5 py-1 rounded-full shadow-sm">
               📅 {todayText}
             </span>
           </div>

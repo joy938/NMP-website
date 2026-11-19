@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
+
 const toNumber = (str) => {
   if (!str) return 0;
   const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -13,14 +14,22 @@ const toNumber = (str) => {
   return Number(en) || 0;
 };
 
+const normalizePuja = (str) =>
+  String(str || '')
+    .normalize('NFC')
+    .replace(/শ্রী\s*শ্রী/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
 export default function PronamiPage() {
   const ADMIN_PIN = '0000';
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/edit?usp=sharing';
   const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
-  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
-  const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
+  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
+  const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
 
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -53,10 +62,9 @@ export default function PronamiPage() {
             v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
           );
           if (upCols[0]) upcomingPujaName = upCols[0];
-          if (upCols[2]) {
-            const convertedYear = toNumber(upCols[2].match(/[০-৯\d]{4}/)?.[0]);
-            if (convertedYear) setSelectedYear(convertedYear);
-          }
+          const yearMatch = (upCols[2] || upCols[1] || '').match(/[০-৯\d]{4}/)?.[0];
+          const convertedYear = toNumber(yearMatch);
+          if (convertedYear) setSelectedYear(convertedYear);
         }
       }
 
@@ -90,11 +98,14 @@ export default function PronamiPage() {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedRecords.map((r) => r.puja).filter(Boolean)])
         );
-        const matchedPuja = allPujas.find((p) => upcomingPujaName.includes(p));
+        const normUp = normalizePuja(upcomingPujaName);
+        const matchedPuja =
+          allPujas.find((p) => normalizePuja(p) === normUp) ||
+          allPujas.find((p) => normUp.includes(normalizePuja(p)) || normalizePuja(p).includes(normUp));
         if (matchedPuja) setSelectedPuja(matchedPuja);
       }
     } catch (error) {
-      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
+      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -122,7 +133,9 @@ export default function PronamiPage() {
   );
 
   const allYearRecords = records.filter(
-    (r) => r.puja === selectedPuja && Number(r.year) === Number(selectedYear)
+    (r) =>
+      normalizePuja(r.puja) === normalizePuja(selectedPuja) &&
+      Number(r.year) === Number(selectedYear)
   );
 
   const totalPledged = allYearRecords.reduce((sum, r) => sum + r.pledged, 0);
@@ -139,7 +152,7 @@ export default function PronamiPage() {
         <Navbar />
       </div>
 
-      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
+      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
       <div className="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none z-0">
         <img
           src="/logo.png"
@@ -217,10 +230,10 @@ export default function PronamiPage() {
           </div>
           
           <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold mt-2">
-            নবীন মহাজন পাড়া — {selectedPuja} ({selectedYear})
+            নবীন মহাজন পাড়া — {selectedPuja} ({selectedYear})
           </h1>
           <p className="text-amber-100 text-xs sm:text-sm mt-1">
-            পূজার প্রণামী ও চাঁদা আদায়ের পূর্ণাঙ্গ খাতা
+            পূজার প্রণামী ও চাঁদা আদায়ের পূর্ণাঙ্গ খাতা
           </p>
         </div>
 
@@ -272,11 +285,11 @@ export default function PronamiPage() {
               <div className="text-base sm:text-xl font-bold text-blue-800 mt-0.5">{totalPledged} ৳</div>
             </div>
             <div className="bg-green-50/90 border border-green-200 rounded-xl p-2.5 sm:p-3 text-center">
-              <div className="text-[10px] sm:text-xs text-green-700 font-semibold">মোট আদায়</div>
+              <div className="text-[10px] sm:text-xs text-green-700 font-semibold">মোট আদায়</div>
               <div className="text-base sm:text-xl font-bold text-green-800 mt-0.5">{totalPaid} ৳</div>
             </div>
             <div className="bg-red-50/90 border border-red-200 rounded-xl p-2.5 sm:p-3 text-center">
-              <div className="text-[10px] sm:text-xs text-red-700 font-semibold">মোট বকেয়া</div>
+              <div className="text-[10px] sm:text-xs text-red-700 font-semibold">মোট বকেয়া</div>
               <div className="text-base sm:text-xl font-bold text-red-800 mt-0.5">{totalDue} ৳</div>
             </div>
           </div>
@@ -288,7 +301,7 @@ export default function PronamiPage() {
             </span>
             <input
               type="text"
-              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
+              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
@@ -307,12 +320,11 @@ export default function PronamiPage() {
           <div className="w-full">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                {/* <span className="text-2xl animate-spin">⏳</span> */}
-               <Loader text="হিসাব লোড হচ্ছে..." />
+                <Loader text="হিসাব লোড হচ্ছে..." />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
@@ -321,8 +333,8 @@ export default function PronamiPage() {
                     <th className="py-2.5 px-1 sm:px-3 w-7 sm:w-10 text-center">#</th>
                     <th className="py-2.5 px-1.5 sm:px-3">নাম</th>
                     <th className="py-2.5 px-1 sm:px-3 text-right">ধার্য</th>
-                    <th className="py-2.5 px-1 sm:px-3 text-right">দিয়েছে</th>
-                    <th className="py-2.5 px-1 sm:px-3 text-right">বকেয়া</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-right">দিয়েছে</th>
+                    <th className="py-2.5 px-1 sm:px-3 text-right">বকেয়া</th>
                     <th className="py-2.5 px-1 sm:px-3 text-center">স্ট্যাটাস</th>
                   </tr>
                 </thead>
@@ -331,7 +343,7 @@ export default function PronamiPage() {
                     <tr>
                       <td colSpan="6" className="py-8 text-center text-gray-400 text-sm">
                         {searchQuery
-                          ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
+                          ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
                           : `${selectedPuja} (${selectedYear}) তে কোনো এন্ট্রি নেই।`}
                       </td>
                     </tr>
@@ -363,7 +375,7 @@ export default function PronamiPage() {
                               </span>
                             ) : (
                               <span className="bg-red-100 text-red-600 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
-                                {r.paid > 0 ? `বাকি ${due}` : '✕ বকেয়া'}
+                                {r.paid > 0 ? `বাকি ${due}` : '✕ বকেয়া'}
                               </span>
                             )}
                           </td>

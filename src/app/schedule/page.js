@@ -4,6 +4,14 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
+const normalizePuja = (str) =>
+  String(str || '')
+    .normalize('NFC')
+    .replace(/শ্রী\s*শ্রী/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
 export default function SchedulePage() {
   const ADMIN_PIN = '0000';
 
@@ -11,7 +19,7 @@ export default function SchedulePage() {
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/edit?usp=sharing';
   const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
-  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
+  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -62,7 +70,7 @@ export default function SchedulePage() {
             id: i,
             event: cols[0],
             date: cols[1] || 'নির্ধারিত দিন',
-            time: cols[2] || 'নির্ধারিত সময়',
+            time: cols[2] || 'নির্ধারিত সময়',
             puja: cols[3] || 'কার্তিক পূজা',
           });
         }
@@ -74,11 +82,14 @@ export default function SchedulePage() {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedSchedules.map((s) => s.puja).filter(Boolean)])
         );
-        const matchedPuja = allPujas.find((p) => upcomingPujaName.includes(p));
+        const normUp = normalizePuja(upcomingPujaName);
+        const matchedPuja =
+          allPujas.find((p) => normalizePuja(p) === normUp) ||
+          allPujas.find((p) => normUp.includes(normalizePuja(p)) || normalizePuja(p).includes(normUp));
         if (matchedPuja) setSelectedPuja(matchedPuja);
       }
     } catch (error) {
-      console.error('সময়সূচী লোড করতে সমস্যা হয়েছে:', error);
+      console.error('সময়সূচী লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -101,12 +112,14 @@ export default function SchedulePage() {
     }
   };
 
-  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ট্যাবে আসবে
+  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ট্যাবে আসবে
   const pujas = Array.from(
     new Set([...defaultPujas, ...schedules.map((s) => s.puja).filter(Boolean)])
   );
 
-  const currentPujaSchedules = schedules.filter((item) => item.puja === selectedPuja);
+  const currentPujaSchedules = schedules.filter(
+    (item) => normalizePuja(item.puja) === normalizePuja(selectedPuja)
+  );
 
   const filteredSchedules = currentPujaSchedules.filter((item) =>
     item.event.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
@@ -135,7 +148,7 @@ export default function SchedulePage() {
                   rel="noopener noreferrer"
                   className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
                 >
-                  <span>📊</span> শিটে সময় এডিট করুন
+                  <span>📊</span> শিটে সময় এডিট করুন
                 </a>
                 <button
                   onClick={() => setIsAdmin(false)}
@@ -156,7 +169,7 @@ export default function SchedulePage() {
             <button
               onClick={fetchScheduleData}
               disabled={isLoading}
-              title="নতুন সময়সূচী লোড করতে ক্লিক করুন"
+              title="নতুন সময়সূচী লোড করতে ক্লিক করুন"
               className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
             >
               <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
@@ -172,9 +185,9 @@ export default function SchedulePage() {
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
             </span>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার সময়সূচী ও কার্যক্রম</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার সময়সূচী ও কার্যক্রম</h1>
           <p className="text-red-100 text-sm mt-2">
-            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ সময়সূচী দেখানো হচ্ছে।
+            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ সময়সূচী দেখানো হচ্ছে।
           </p>
         </div>
 
@@ -184,7 +197,7 @@ export default function SchedulePage() {
           <div>
             <h3 className="font-bold text-amber-900 text-sm">সাধারণ অবগতি ও অনুরোধ:</h3>
             <p className="text-xs text-amber-800 mt-0.5">
-              সকল ভক্তবৃন্দ ও পাড়াবাসীকে যথাসময়ে উপস্থিত হয়ে পুষ্পাঞ্জলি প্রদান ও মহাপ্রসাদ গ্রহণ করার জন্য বিনীত অনুরোধ জানানো হচ্ছে।
+              সকল ভক্তবৃন্দ ও পাড়াবাসীকে যথাসময়ে উপস্থিত হয়ে পুষ্পাঞ্জলি প্রদান ও মহাপ্রসাদ গ্রহণ করার জন্য বিনীত অনুরোধ জানানো হচ্ছে।
             </p>
           </div>
         </div>
@@ -213,7 +226,7 @@ export default function SchedulePage() {
         <div className="bg-white rounded-2xl shadow border border-gray-100 p-5 md:p-6">
           <div className="border-b pb-3 mb-5 flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <span>📅</span> {selectedPuja}র সময়সূচী
+              <span>📅</span> {selectedPuja}র সময়সূচী
             </h2>
             <span className="text-xs bg-red-100 text-red-700 font-semibold px-2.5 py-1 rounded-full">
               {currentPujaSchedules.length} টি কার্যক্রম
@@ -227,7 +240,7 @@ export default function SchedulePage() {
             </span>
             <input
               type="text"
-              placeholder="কার্যক্রম বা সময় দিয়ে খুঁজুন (যেমন: অঞ্জলি, আরতি, সকাল)..."
+              placeholder="কার্যক্রম বা সময় দিয়ে খুঁজুন (যেমন: অঞ্জলি, আরতি, সকাল)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -242,16 +255,15 @@ export default function SchedulePage() {
             )}
           </div>
 
-          {/* সময়সূচী কার্ড লিস্ট */}
+          {/* সময়সূচী কার্ড লিস্ট */}
           <div className="space-y-3">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                {/* <span className="text-2xl animate-spin">⏳</span> */}
-            <Loader/>
+                <Loader />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : filteredSchedules.length === 0 ? (
               <div className="py-8 text-center text-gray-400 text-sm">

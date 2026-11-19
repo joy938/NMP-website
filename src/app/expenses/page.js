@@ -14,6 +14,14 @@ const toNumber = (str) => {
   return Number(en) || 0;
 };
 
+const normalizePuja = (str) =>
+  String(str || '')
+    .normalize('NFC')
+    .replace(/শ্রী\s*শ্রী/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
 export default function ExpensesPage() {
   const ADMIN_PIN = '0000';
 
@@ -22,8 +30,8 @@ export default function ExpensesPage() {
   const PRONAMI_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/gviz/tq?tqx=out:csv';
   const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
-  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন'];
-  const years = Array.from({ length: 12 }, (_, i) => 2025 + i);
+  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
+  const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
 
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -58,10 +66,9 @@ export default function ExpensesPage() {
             v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
           );
           if (upCols[0]) upcomingPujaName = upCols[0];
-          if (upCols[2]) {
-            const convertedYear = toNumber(upCols[2].match(/[০-৯\d]{4}/)?.[0]);
-            if (convertedYear) setSelectedYear(convertedYear);
-          }
+          const yearMatch = (upCols[2] || upCols[1] || '').match(/[০-৯\d]{4}/)?.[0];
+          const convertedYear = toNumber(yearMatch);
+          if (convertedYear) setSelectedYear(convertedYear);
         }
       }
 
@@ -112,11 +119,14 @@ export default function ExpensesPage() {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedExpenses.map((e) => e.puja).filter(Boolean)])
         );
-        const matchedPuja = allPujas.find((p) => upcomingPujaName.includes(p));
+        const normUp = normalizePuja(upcomingPujaName);
+        const matchedPuja =
+          allPujas.find((p) => normalizePuja(p) === normUp) ||
+          allPujas.find((p) => normUp.includes(normalizePuja(p)) || normalizePuja(p).includes(normUp));
         if (matchedPuja) setSelectedPuja(matchedPuja);
       }
     } catch (error) {
-      console.error('ডাটা লোড করতে সমস্যা হয়েছে:', error);
+      console.error('ডাটা লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -144,12 +154,16 @@ export default function ExpensesPage() {
   );
 
   const currentExpenses = expenses.filter(
-    (e) => e.puja === selectedPuja && Number(e.year) === Number(selectedYear)
+    (e) =>
+      normalizePuja(e.puja) === normalizePuja(selectedPuja) &&
+      Number(e.year) === Number(selectedYear)
   );
   const totalExpense = currentExpenses.reduce((sum, item) => sum + item.cost, 0);
 
   const currentIncomeRecords = pronamiRecords.filter(
-    (r) => r.puja === selectedPuja && Number(r.year) === Number(selectedYear)
+    (r) =>
+      normalizePuja(r.puja) === normalizePuja(selectedPuja) &&
+      Number(r.year) === Number(selectedYear)
   );
   const totalIncome = currentIncomeRecords.reduce((sum, item) => sum + item.paid, 0);
 
@@ -166,7 +180,7 @@ export default function ExpensesPage() {
         <Navbar />
       </div>
 
-      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
+      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
       <div className="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none z-0">
         <img
           src="/logo.png"
@@ -233,7 +247,7 @@ export default function ExpensesPage() {
         <div className="bg-gradient-to-r from-purple-700 to-indigo-600 text-white p-5 md:p-8 rounded-3xl shadow-md mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 print:hidden">
-              <span className="bg-white/20 text-purple-200 text-[11px] px-2.5 py-0.5 rounded font-bold">ব্যয়-বিবরণ</span>
+              <span className="bg-white/20 text-purple-200 text-[11px] px-2.5 py-0.5 rounded font-bold">ব্যয়-বিবরণ</span>
               <span className="bg-green-500/80 text-white text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ হিসাব
               </span>
@@ -244,10 +258,10 @@ export default function ExpensesPage() {
           </div>
 
           <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold mt-2">
-            নবীন মহাজন পাড়া — {selectedPuja} ({selectedYear})
+            নবীন মহাজন পাড়া — {selectedPuja} ({selectedYear})
           </h1>
           <p className="text-purple-100 text-xs sm:text-sm mt-1">
-            ব্যয়ের পূর্ণাঙ্গ বিবরণী ও অবশিষ্ট তহবিলের হিসাব খাতা
+            ব্যয়ের পূর্ণাঙ্গ বিবরণী ও অবশিষ্ট তহবিলের হিসাব খাতা
           </p>
         </div>
 
@@ -296,7 +310,7 @@ export default function ExpensesPage() {
           <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-5">
             
             <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-2.5 sm:p-4 text-center">
-              <span className="text-[10px] sm:text-xs text-blue-700 font-bold uppercase block">মোট আদায়</span>
+              <span className="text-[10px] sm:text-xs text-blue-700 font-bold uppercase block">মোট আদায়</span>
               <div className="text-base sm:text-2xl font-black text-blue-900 mt-0.5">
                 {totalIncome} ৳
               </div>
@@ -335,7 +349,7 @@ export default function ExpensesPage() {
             </span>
             <input
               type="text"
-              placeholder="খরচের বিবরণ বা ক্যাটাগরি দিয়ে খুঁজুন..."
+              placeholder="খরচের বিবরণ বা ক্যাটাগরি দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-purple-600 bg-gray-50 focus:bg-white transition"
@@ -354,12 +368,11 @@ export default function ExpensesPage() {
           <div className="w-full">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                {/* <span className="text-2xl animate-spin">⏳</span> */}
-         <Loader text="হিসাব লোড হচ্ছে..." />
+                <Loader text="হিসাব লোড হচ্ছে..." />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
