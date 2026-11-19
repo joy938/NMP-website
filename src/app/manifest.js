@@ -9,10 +9,10 @@ export default function manifest() {
     display: 'standalone',
     background_color: '#fef3c7',
     theme_color: '#b91c1c',
-    icons: [
+icons: [
       {
         src: '/logo.png',
-        sizes: '512x512',
+        sizes: 'any',
         type: 'image/png',
       },
     ],
