@@ -10,7 +10,7 @@ export default function SanghaPage() {
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/gviz/tq?tqx=out:csv';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/edit?usp=sharing';
 
-  const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+  const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
   const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
 
   const currentMonthName = months[new Date().getMonth()];
@@ -28,6 +28,9 @@ export default function SanghaPage() {
   const [records, setRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
+
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [dueCopied, setDueCopied] = useState(false);
 
   const fetchGoogleSheetData = async () => {
     setIsLoading(true);
@@ -53,14 +56,14 @@ export default function SanghaPage() {
             name: cols[0],
             month: cols[1] || currentMonthName,
             year: Number(cols[2]) || currentYearNumber,
-            status: cols[3] || 'বকেয়া',
+            status: cols[3] || 'বকেয়া',
           });
         }
       }
 
       setRecords(parsedRecords);
     } catch (error) {
-      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
+      console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -94,20 +97,66 @@ export default function SanghaPage() {
     r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
 
+  const handleCopyDueList = async () => {
+    const dueMembers = currentMonthRecords.filter((r) => !r.status.includes('পরিশোধিত'));
+    if (dueMembers.length === 0) {
+      alert('এই মাসে কোনো বকেয়া নেই!');
+      return;
+    }
+
+    const lines = dueMembers.map((m, idx) => `${idx + 1}. ${m.name}`);
+    const text =
+      `📌 *নবজাগরণ একতা সংঘ — বকেয়া তালিকা*\n` +
+      `মাস: ${selectedMonth} ${selectedYear}\n\n` +
+      lines.join('\n') +
+      `\n\nমোট বাকি: ${dueMembers.length} জন (${dueMembers.length * 50} ৳)`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setDueCopied(true);
+      setTimeout(() => setDueCopied(false), 2000);
+    } catch {
+      alert('কপি করা যায়নি।');
+    }
+  };
+
+  const memberYearRecords = selectedMember
+    ? months.map((m) => {
+        const found = records.find(
+          (r) =>
+            r.name === selectedMember &&
+            r.month === m &&
+            Number(r.year) === Number(selectedYear)
+        );
+        return {
+          month: m,
+          status: found ? (found.status.includes('পরিশোধিত') ? 'paid' : 'due') : 'none',
+        };
+      })
+    : [];
+
+  const memberPaidMonths = memberYearRecords.filter((x) => x.status === 'paid').length;
+
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
       <Navbar />
 
       <div className="max-w-4xl mx-auto py-8 px-4">
         {/* টপ বার */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-6">
           <Link href="/" className="inline-flex items-center text-red-600 hover:text-red-800 font-medium text-sm">
             ← হোমে ফিরে যান
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isAdmin ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleCopyDueList}
+                  className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  {dueCopied ? '✓ কপি হয়েছে!' : '📋 বকেয়া কপি'}
+                </button>
                 <a
                   href={GOOGLE_SHEET_EDIT_URL}
                   target="_blank"
@@ -159,7 +208,7 @@ export default function SanghaPage() {
             </div>
             <h1 className="text-xl sm:text-3xl font-extrabold mt-2">নবজাগরণ একতা সংঘ</h1>
             <p className="text-red-100 text-xs sm:text-sm mt-1">
-              নবীন মহাজন পাড়ার সকল পূজা ও সামাজিক উন্নয়নমূলক কাজ এই সংগঠনের মাধ্যমেই পরিচালিত হয়।
+              নবীন মহাজন পাড়ার সকল পূজা ও সামাজিক উন্নয়নমূলক কাজ এই সংগঠনের মাধ্যমেই পরিচালিত হয়।
             </p>
           </div>
         </div>
@@ -171,7 +220,7 @@ export default function SanghaPage() {
             <div>
               <h2 className="text-lg font-bold text-gray-800">💳 মাসিক চাঁদা ট্র্যাকার (৫০ ৳)</h2>
               <p className="text-xs text-gray-500">
-                মাস ও বছর নির্বাচন করে চাঁদা আদায়ের লাইভ হিসাব দেখুন।
+                মাস ও বছর নির্বাচন করে চাঁদা আদায়ের লাইভ হিসাব দেখুন (যেকোনো নামে ট্যাপ করলে ১২ মাসের হিসাব দেখাবে)।
               </p>
             </div>
 
@@ -206,7 +255,7 @@ export default function SanghaPage() {
 
           <div className="grid grid-cols-2 gap-3 mb-6">
             <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-              <div className="text-xs text-green-700 font-semibold">{selectedMonth} {selectedYear} আদায়</div>
+              <div className="text-xs text-green-700 font-semibold">{selectedMonth} {selectedYear} আদায়</div>
               <div className="text-xl font-bold text-green-800 mt-1">{paidCount * 50} ৳</div>
               <div className="text-[11px] text-green-600">{paidCount} জন পরিশোধ করেছেন</div>
             </div>
@@ -223,7 +272,7 @@ export default function SanghaPage() {
             </span>
             <input
               type="text"
-              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
+              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -232,7 +281,7 @@ export default function SanghaPage() {
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
-                title="সার্চ ক্লিয়ার করুন"
+                title="সার্চ ক্লিয়ার করুন"
               >
                 ✕
               </button>
@@ -242,12 +291,11 @@ export default function SanghaPage() {
           <div className="overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-                {/* <span className="text-2xl animate-spin">⏳</span> */}
-              <Loader text="হিসাব লোড হচ্ছে..." />
+                <Loader text="হিসাব লোড হচ্ছে..." />
               </div>
             ) : isError ? (
               <div className="py-8 text-center text-red-600 text-sm">
-                গুগল শিট লোড করতে সমস্যা হয়েছে।
+                গুগল শিট লোড করতে সমস্যা হয়েছে।
               </div>
             ) : (
               <table className="w-full text-left text-sm">
@@ -263,7 +311,7 @@ export default function SanghaPage() {
                     <tr>
                       <td colSpan="3" className="py-8 text-center text-gray-400 text-sm">
                         {searchQuery
-                          ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
+                          ? `"${searchQuery}" নামে কাউকে পাওয়া যায়নি।`
                           : `${selectedMonth} ${selectedYear}-এর জন্য গুগল শিটে কোনো রেকর্ড নেই।`}
                       </td>
                     </tr>
@@ -272,7 +320,11 @@ export default function SanghaPage() {
                       const isPaid = member.status.includes('পরিশোধিত');
 
                       return (
-                     <tr key={index} className="even:bg-orange-100/50 hover:bg-orange-100 transition-colors">
+                        <tr
+                          key={index}
+                          onClick={() => setSelectedMember(member.name)}
+                          className="even:bg-orange-100/50 hover:bg-orange-100 transition-colors cursor-pointer"
+                        >
                           <td className="py-3 px-3 text-center text-gray-400 text-xs">{index + 1}</td>
                           <td className="py-3 px-3 font-semibold text-gray-800">{member.name}</td>
                           <td className="py-3 px-3 text-center">
@@ -283,7 +335,7 @@ export default function SanghaPage() {
                                   : 'bg-red-100 text-red-600'
                               }`}
                             >
-                              {isPaid ? '✓ ৫০ ৳ পরিশোধিত' : '✕ বকেয়া'}
+                              {isPaid ? '✓ ৫০ ৳ পরিশোধিত' : '✕ বকেয়া'}
                             </span>
                           </td>
                         </tr>
@@ -297,6 +349,56 @@ export default function SanghaPage() {
 
         </div>
       </div>
+
+      {/* সদস্যের ১২ মাসের হিসাব মডাল */}
+      {selectedMember && (
+        <div
+          onClick={() => setSelectedMember(null)}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl border border-orange-100"
+          >
+            <div className="flex items-start justify-between gap-2 pb-3 border-b">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-gray-800">{selectedMember}</h3>
+                <p className="text-xs text-gray-500">{selectedYear} সালের ১২ মাসের চাঁদার হিসাব</p>
+              </div>
+              <button
+                onClick={() => setSelectedMember(null)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 my-4">
+              {memberYearRecords.map((item) => (
+                <div
+                  key={item.month}
+                  className={`p-2 rounded-xl border text-center text-xs font-semibold ${
+                    item.status === 'paid'
+                      ? 'bg-green-50 border-green-200 text-green-700'
+                      : item.status === 'due'
+                      ? 'bg-red-50 border-red-200 text-red-600'
+                      : 'bg-gray-50 border-gray-200 text-gray-400'
+                  }`}
+                >
+                  <div>{item.month}</div>
+                  <div className="text-[11px] mt-0.5 font-bold">
+                    {item.status === 'paid' ? '✓ ৫০ ৳' : item.status === 'due' ? '✕ বকেয়া' : '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center text-xs font-bold text-amber-900">
+              {selectedYear} সালে মোট পরিশোধ: {memberPaidMonths} মাস ({memberPaidMonths * 50} ৳)
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (

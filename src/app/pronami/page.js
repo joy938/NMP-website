@@ -44,6 +44,9 @@ export default function PronamiPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
+  const [dueCopied, setDueCopied] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState(null);
+
   const fetchGoogleSheetData = async () => {
     setIsLoading(true);
     setIsError(false);
@@ -146,6 +149,57 @@ export default function PronamiPage() {
     r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
 
+  const handleCopyDueList = async () => {
+    const dueRecords = allYearRecords.filter((r) => !(r.pledged - r.paid <= 0 && r.pledged > 0));
+    if (dueRecords.length === 0) {
+      alert('কোনো বকেয়া নেই!');
+      return;
+    }
+
+    const lines = dueRecords.map((r, idx) => {
+      const due = r.pledged - r.paid;
+      return due > 0 ? `${idx + 1}. ${r.name} — ${due} ৳` : `${idx + 1}. ${r.name} — (বকেয়া)`;
+    });
+
+    const text =
+      `📌 *${selectedPuja} (${selectedYear}) — বকেয়া তালিকা:*\n\n` +
+      lines.join('\n') +
+      `\n\nমোট বাকি: ${dueRecords.length} জন (মোট ${totalDue} ৳)`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setDueCopied(true);
+      setTimeout(() => setDueCopied(false), 2000);
+    } catch {
+      alert('কপি করা যায়নি।');
+    }
+  };
+
+  // নির্বাচিত ব্যক্তির সারা বছরের সব পূজার হিসাব
+  const personYearPujas = selectedPerson
+    ? pujas.map((p) => {
+        const matches = records.filter(
+          (r) =>
+            r.name === selectedPerson &&
+            normalizePuja(r.puja) === normalizePuja(p) &&
+            Number(r.year) === Number(selectedYear)
+        );
+        const pledged = matches.reduce((s, m) => s + m.pledged, 0);
+        const paid = matches.reduce((s, m) => s + m.paid, 0);
+        const due = Math.max(0, pledged - paid);
+        return {
+          puja: p,
+          hasRecord: matches.length > 0,
+          pledged,
+          paid,
+          due,
+        };
+      })
+    : [];
+
+  const personTotalPaid = personYearPujas.reduce((s, x) => s + x.paid, 0);
+  const personTotalDue = personYearPujas.reduce((s, x) => s + x.due, 0);
+
   return (
    <main className="min-h-screen bg-gray-50 print:bg-transparent text-gray-800 relative">
       <div className="print:hidden">
@@ -169,7 +223,7 @@ export default function PronamiPage() {
             ← হোমে ফিরে যান
           </Link>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => window.print()}
               title="তালিকাটি প্রিন্ট বা PDF হিসেবে সেভ করুন"
@@ -179,7 +233,13 @@ export default function PronamiPage() {
             </button>
 
             {isAdmin ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={handleCopyDueList}
+                  className="text-[11px] sm:text-xs bg-amber-600 hover:bg-amber-700 text-white px-2.5 sm:px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  {dueCopied ? '✓ কপি হয়েছে!' : '📋 বকেয়া কপি'}
+                </button>
                 <a
                   href={GOOGLE_SHEET_EDIT_URL}
                   target="_blank"
@@ -245,7 +305,7 @@ export default function PronamiPage() {
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-800">📋 প্রণামীর তালিকা</h2>
               <p className="text-xs text-gray-500">
-                পূজা ও বছর নির্বাচন করে যেকোনো সদস্যের হিসাব দেখুন।
+                পূজা ও বছর নির্বাচন করুন (যেকোনো নামে ট্যাপ করলে ওই বছরের সব পূজার হিসাব দেখাবে)।
               </p>
             </div>
 
@@ -301,7 +361,7 @@ export default function PronamiPage() {
             </span>
             <input
               type="text"
-              placeholder="নাম দিয়ে খুঁজুন (যেমন: সুমন, রকি, দিপক)..."
+              placeholder="নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুৎ, সুকুমার, দিপক)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
@@ -352,7 +412,11 @@ export default function PronamiPage() {
                       const due = r.pledged - r.paid;
 
                       return (
-                        <tr key={r.id} className="hover:bg-gray-50">
+                        <tr
+                          key={r.id}
+                          onClick={() => setSelectedPerson(r.name)}
+                          className="hover:bg-amber-50/70 cursor-pointer transition-colors"
+                        >
                           <td className="py-2.5 px-1 sm:px-3 text-center text-gray-400 text-[11px] sm:text-xs">
                             {index + 1}
                           </td>
@@ -390,6 +454,58 @@ export default function PronamiPage() {
 
         </div>
       </div>
+
+      {/* দাতার সারা বছরের সব পূজার হিসাব মডাল */}
+      {selectedPerson && (
+        <div
+          onClick={() => setSelectedPerson(null)}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print:hidden"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl border border-amber-100"
+          >
+            <div className="flex items-start justify-between gap-2 pb-3 border-b">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-gray-800">{selectedPerson}</h3>
+                <p className="text-xs text-gray-500">{selectedYear} সালের সকল পূজার প্রণামী হিসাব</p>
+              </div>
+              <button
+                onClick={() => setSelectedPerson(null)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 my-4">
+              {personYearPujas.map((item) => (
+                <div
+                  key={item.puja}
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-gray-100 bg-gray-50 text-xs sm:text-sm"
+                >
+                  <span className="font-semibold text-gray-800">{item.puja}</span>
+                  {!item.hasRecord ? (
+                    <span className="text-gray-400 font-medium">—</span>
+                  ) : item.due <= 0 && item.pledged > 0 ? (
+                    <span className="bg-green-100 text-green-700 font-bold px-2.5 py-0.5 rounded-full text-xs">
+                      ✓ {item.paid} ৳
+                    </span>
+                  ) : (
+                    <span className="bg-red-100 text-red-600 font-bold px-2.5 py-0.5 rounded-full text-xs">
+                      {item.paid > 0 ? `দিয়েছে ${item.paid} ৳ • বাকি ${item.due} ৳` : item.due > 0 ? `বাকি ${item.due} ৳` : '✕ বকেয়া'}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-center text-xs font-bold text-amber-900">
+              {selectedYear} সালে মোট জমা: {personTotalPaid} ৳ • মোট বাকি: {personTotalDue} ৳
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (
