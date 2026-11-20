@@ -71,6 +71,20 @@ const isTodayAnniversary = (dateStr, today) => {
   return false;
 };
 
+// প্রয়াণের কত বছর হলো তা অটোমেটিক হিসাব
+const getYearsAgoLabel = (yearStr, dateStr, today) => {
+  if (!today) return '';
+  const rawYear = toEnglishDigits(yearStr || dateStr).match(/\b(19\d{2}|20\d{2})\b/)?.[0];
+  if (!rawYear) return '';
+  const deathYear = parseInt(rawYear, 10);
+  const diff = today.getFullYear() - deathYear;
+  if (diff <= 0) return '';
+
+  const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  const toBn = (n) => String(n).replace(/\d/g, (d) => bnDigits[d]);
+  return `${toBn(diff)} বছর আগে`;
+};
+
 export default function SmaranikaPage() {
   const ADMIN_PIN = '0000';
 
@@ -299,8 +313,7 @@ export default function SmaranikaPage() {
         {/* স্মরণিকা কার্ড গ্রিড */}
         {isLoading ? (
           <div className="py-16 text-center text-stone-500 text-sm flex flex-col items-center gap-2">
-            {/* <span className="text-2xl animate-spin">⏳</span> */}
-         <Loader/>
+            <Loader />
           </div>
         ) : isError ? (
           <div className="py-12 text-center text-red-600 text-sm">
@@ -317,6 +330,7 @@ export default function SmaranikaPage() {
             {filteredSouls.map((soul) => {
               const isLit = litDiyas[soul.id] || false;
               const isAnniversary = isTodayAnniversary(soul.date, today);
+              const yearsAgo = getYearsAgoLabel(soul.year, soul.date, today);
 
               return (
                 <div
@@ -347,7 +361,6 @@ export default function SmaranikaPage() {
                           alt={soul.name}
                           className="w-full h-full object-cover rounded-full"
                           onError={(e) => {
-                            // যদি লিংকে সমস্যা হয় তবে ব্রোকেন ছবি না দেখিয়ে প্রদীপ দেখাবে
                             e.currentTarget.style.display = 'none';
                             e.currentTarget.parentElement.innerHTML = '<span class="text-3xl">🪔</span>';
                           }}
@@ -362,9 +375,12 @@ export default function SmaranikaPage() {
                       {soul.name}
                     </h3>
 
-                    {/* প্রয়াণের তারিখ */}
+                    {/* প্রয়াণের তারিখ ও কত বছর আগে */}
                     <p className="text-xs text-stone-600 mt-1 font-medium">
                       প্রয়াণ: <span className="text-stone-800 font-semibold">{soul.date}</span>
+                      {yearsAgo && (
+                        <span className="text-amber-700 font-semibold"> • {yearsAgo}</span>
+                      )}
                     </p>
                   </div>
 

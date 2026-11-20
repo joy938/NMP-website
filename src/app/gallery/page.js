@@ -4,16 +4,21 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
-// গুগল ড্রাইভের জন্য সবচেয়ে নির্ভরযোগ্য হাই-স্পিড ইমেজ লিংক কনভার্টার
+// গুগল ড্রাইভের জন্য সবচেয়ে নির্ভরযোগ্য হাই-স্পিড ইমেজ লিংক কনভার্টার
 const formatImageUrl = (url) => {
   if (!url) return '';
   const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
   const match = url.match(driveRegex);
   if (match && match[1]) {
-    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
+    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
   }
   return url;
+};
+
+const toBanglaDigits = (num) => {
+  const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  return String(num).replace(/\d/g, (d) => bn[d]);
 };
 
 export default function GalleryPage() {
@@ -24,6 +29,7 @@ export default function GalleryPage() {
 
   const [selectedAlbum, setSelectedAlbum] = useState('সব ছবি');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [touchStartX, setTouchStartX] = useState(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -64,7 +70,7 @@ export default function GalleryPage() {
 
       setPhotos(parsedPhotos);
     } catch (error) {
-      console.error('গ্যালারি লোড করতে সমস্যা হয়েছে:', error);
+      console.error('গ্যালারি লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
     } finally {
       setIsLoading(false);
@@ -72,6 +78,9 @@ export default function GalleryPage() {
   };
 
   useEffect(() => {
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
     fetchGalleryData();
   }, []);
 
@@ -79,6 +88,7 @@ export default function GalleryPage() {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
@@ -87,11 +97,55 @@ export default function GalleryPage() {
     }
   };
 
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
+  };
+
   const albums = ['সব ছবি', ...Array.from(new Set(photos.map((p) => p.album).filter(Boolean)))];
 
   const filteredPhotos = photos.filter(
     (p) => selectedAlbum === 'সব ছবি' || p.album === selectedAlbum
   );
+
+  const currentIndex = selectedImage
+    ? filteredPhotos.findIndex((p) => p.id === selectedImage.id)
+    : -1;
+
+  const handlePrev = () => {
+    if (filteredPhotos.length <= 1 || currentIndex === -1) return;
+    const prevIdx = (currentIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
+    setSelectedImage(filteredPhotos[prevIdx]);
+  };
+
+  const handleNext = () => {
+    if (filteredPhotos.length <= 1 || currentIndex === -1) return;
+    const nextIdx = (currentIndex + 1) % filteredPhotos.length;
+    setSelectedImage(filteredPhotos[nextIdx]);
+  };
+
+  useEffect(() => {
+    if (!selectedImage) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') handlePrev();
+      else if (e.key === 'ArrowRight') handleNext();
+      else if (e.key === 'Escape') setSelectedImage(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedImage, currentIndex, filteredPhotos.length]);
+
+  const handleTouchStart = (e) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchEnd = (e) => {
+    if (touchStartX === null) return;
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (diff > 50) handleNext();
+    else if (diff < -50) handlePrev();
+    setTouchStartX(null);
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
@@ -117,7 +171,7 @@ export default function GalleryPage() {
                   <span>📊</span> শিটে ছবি যোগ করুন
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleAdminLogout}
                   className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
                 >
                   লগআউট
@@ -149,7 +203,7 @@ export default function GalleryPage() {
             ফটো গ্যালারি
           </h1>
           <p className="text-amber-100 text-xs md:text-sm mt-2 max-w-md mx-auto">
-            আমাদের নবীন মহাজন পাড়ার সকল পূজা ও মহোৎসবের আনন্দঘন মুহূর্তের আলোকচিত্রমালা।
+            আমাদের নবীন মহাজন পাড়ার সকল পূজা ও মহোৎসবের আনন্দঘন মুহূর্তের আলোকচিত্রমালা।
           </p>
         </div>
 
@@ -176,12 +230,11 @@ export default function GalleryPage() {
         {/* ছবি গ্রিড */}
         {isLoading ? (
           <div className="py-20 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
-            {/* <span className="text-3xl animate-spin">⏳</span> */}
-          <Loader/>
+            <Loader />
           </div>
         ) : isError ? (
           <div className="py-12 text-center text-red-600 text-sm">
-            গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
+            গুগল শিট লোড করতে সমস্যা হয়েছে। শিটটির শেয়ারিং পারমিশন 'Anyone with the link' আছে কি না চেক করুন।
           </div>
         ) : filteredPhotos.length === 0 ? (
           <div className="bg-white p-12 text-center text-gray-400 rounded-2xl border border-gray-200 text-sm">
@@ -212,7 +265,7 @@ export default function GalleryPage() {
                     {photo.caption}
                   </h3>
                   <span className="text-[11px] text-red-600 font-semibold mt-1 inline-block">
-                    বড় করে দেখতে ক্লিক করুন ↗
+                    বড় করে দেখতে ক্লিক করুন ↗
                   </span>
                 </div>
               </div>
@@ -222,21 +275,44 @@ export default function GalleryPage() {
 
       </div>
 
-      {/* ফুলস্ক্রিন ভিউ */}
+      {/* ফুলস্ক্রিন ভিউ (Swipe + < > বাটন সহ) */}
       {selectedImage && (
         <div
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 select-none"
           onClick={() => setSelectedImage(null)}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
+          {/* ছবির নম্বর কাউন্টার */}
+          {currentIndex !== -1 && (
+            <div className="absolute top-5 left-5 bg-black/60 border border-white/20 text-white text-xs sm:text-sm font-bold px-3 py-1 rounded-full">
+              {toBanglaDigits(currentIndex + 1)} / {toBanglaDigits(filteredPhotos.length)}
+            </div>
+          )}
+
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute top-5 right-5 text-white/80 hover:text-white text-3xl font-bold bg-black/50 w-10 h-10 rounded-full flex items-center justify-center"
+            className="absolute top-5 right-5 text-white/80 hover:text-white text-2xl sm:text-3xl font-bold bg-black/50 w-10 h-10 rounded-full flex items-center justify-center"
           >
             ✕
           </button>
 
+          {/* বাম পাশের < বাটন */}
+          {filteredPhotos.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
+              aria-label="আগের ছবি"
+              className="absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/55 hover:bg-black/80 text-white text-2xl font-bold flex items-center justify-center border border-white/20 transition active:scale-95 z-10"
+            >
+              {'<'}
+            </button>
+          )}
+
           <div
-            className="max-w-4xl max-h-[80vh] flex flex-col items-center"
+            className="max-w-4xl max-h-[80vh] flex flex-col items-center px-8 sm:px-14"
             onClick={(e) => e.stopPropagation()}
           >
             <img
@@ -253,6 +329,20 @@ export default function GalleryPage() {
               </span>
             </div>
           </div>
+
+          {/* ডান পাশের > বাটন */}
+          {filteredPhotos.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
+              aria-label="পরের ছবি"
+              className="absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/55 hover:bg-black/80 text-white text-2xl font-bold flex items-center justify-center border border-white/20 transition active:scale-95 z-10"
+            >
+              {'>'}
+            </button>
+          )}
         </div>
       )}
 
