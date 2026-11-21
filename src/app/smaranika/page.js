@@ -10,11 +10,13 @@ const formatImageUrl = (url) => {
   const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
   const match = url.match(driveRegex);
   if (match && match[1]) {
-    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
   }
   return url;
 };
+
+const normalizeBn = (str) =>
+  String(str || '').normalize('NFC').toLowerCase().trim();
 
 // বাংলা সংখ্যাকে ইংরেজিতে রূপান্তর
 const toEnglishDigits = (str) => {
@@ -96,6 +98,7 @@ export default function SmaranikaPage() {
 
   const [litDiyas, setLitDiyas] = useState({});
   const [today, setToday] = useState(null);
+  const [selectedSoul, setSelectedSoul] = useState(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -130,7 +133,8 @@ export default function SmaranikaPage() {
             name: cols[0],
             date: cols[1] || 'তারিখ জানা নেই',
             year: cols[2] ? cols[2].trim() : '',
-            photoUrl: formatImageUrl(cols[3] || ''), // গুগল ড্রাইভ লিংক ঠিক করা হলো
+            photoUrl: formatImageUrl(cols[3] || ''),
+            details: cols[4] || '',
           });
         }
       }
@@ -146,6 +150,9 @@ export default function SmaranikaPage() {
 
   useEffect(() => {
     setToday(new Date());
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
     fetchSmaranikaData();
 
     const savedDiyas = localStorage.getItem('lit_diyas_status');
@@ -168,6 +175,7 @@ export default function SmaranikaPage() {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
@@ -176,14 +184,20 @@ export default function SmaranikaPage() {
     }
   };
 
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
+  };
+
   const availableYears = Array.from(new Set(souls.map((s) => s.year).filter(Boolean))).sort(
     (a, b) => b - a
   );
 
   const filteredSouls = souls.filter((s) => {
     const matchesYear = selectedYear === 'সব' || s.year === selectedYear;
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      s.date.toLowerCase().includes(searchQuery.toLowerCase().trim());
+    const matchesSearch =
+      normalizeBn(s.name).includes(normalizeBn(searchQuery)) ||
+      normalizeBn(s.date).includes(normalizeBn(searchQuery));
     return matchesYear && matchesSearch;
   });
 
@@ -211,7 +225,7 @@ export default function SmaranikaPage() {
                   <span>📊</span> শিটে নাম এডিট করুন
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleAdminLogout}
                   className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
                 >
                   লগআউট
@@ -353,8 +367,12 @@ export default function SmaranikaPage() {
                       </div>
                     )}
 
-                    {/* ছবি অথবা প্রদীপের ফ্রেম (গুগল ড্রাইভ লিংক দিলে ছবি দেখাবে) */}
-                    <div className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden relative">
+                    {/* ছবি অথবা প্রদীপের ফ্রেম (ক্লিক করলে বিস্তারিত পপআপ খুলবে) */}
+                    <div
+                      onClick={() => setSelectedSoul(soul)}
+                      title="বিস্তারিত দেখতে ছবিতে ক্লিক করুন"
+                      className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden relative cursor-pointer hover:scale-105 transition"
+                    >
                       {soul.photoUrl ? (
                         <img
                           src={soul.photoUrl}
@@ -405,6 +423,46 @@ export default function SmaranikaPage() {
         )}
 
       </div>
+
+      {/* ছবিতে ক্লিক করলে শুধু নাম ও বিস্তারিত তথ্য পপআপ */}
+      {selectedSoul && (
+        <div
+          onClick={() => setSelectedSoul(null)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-amber-200 relative"
+          >
+            <div className="h-1.5 bg-gradient-to-r from-amber-400 via-amber-600 to-amber-400" />
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-stone-100">
+                <h3 className="text-lg font-extrabold text-stone-900">
+                  {selectedSoul.name}
+                </h3>
+                <button
+                  onClick={() => setSelectedSoul(null)}
+                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-sm flex items-center justify-center shrink-0 transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-4 p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 max-h-[60vh] overflow-y-auto">
+                {selectedSoul.details ? (
+                  <p className="text-xs sm:text-sm text-stone-700 leading-relaxed whitespace-pre-line break-words">
+                    {selectedSoul.details}
+                  </p>
+                ) : (
+                  <p className="text-xs sm:text-sm text-stone-600 italic text-center">
+                    "ওঁ দিব্যান্ লোকান্ স গচ্ছতু — তাঁর পুণ্য স্মৃতির প্রতি বিনম্র শ্রদ্ধাঞ্জলি।"
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (
