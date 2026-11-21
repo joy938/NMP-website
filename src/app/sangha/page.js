@@ -71,6 +71,9 @@ export default function SanghaPage() {
   };
 
   useEffect(() => {
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
     fetchGoogleSheetData();
   }, []);
 
@@ -78,12 +81,18 @@ export default function SanghaPage() {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
     } else {
       setPinError('ভুল পিন কোড!');
     }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
   };
 
   const currentMonthRecords = records.filter(
@@ -149,6 +158,13 @@ export default function SanghaPage() {
           </Link>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/sangha/expenses"
+              className="text-xs bg-white hover:bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-2xs"
+            >
+              <span>🧾</span> সংঘের খরচ
+            </Link>
+
             {isAdmin ? (
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -166,7 +182,7 @@ export default function SanghaPage() {
                   <span>📊</span> শিটে চাঁদা এডিট করুন
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleAdminLogout}
                   className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full font-medium"
                 >
                   লগআউট
@@ -224,7 +240,7 @@ export default function SanghaPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <div className="flex items-center gap-1">
                 <span className="text-xs font-semibold text-gray-600">মাস:</span>
                 <select

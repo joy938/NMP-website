@@ -104,6 +104,9 @@ export default function GalleryPage() {
 
   const albums = ['সব ছবি', ...Array.from(new Set(photos.map((p) => p.album).filter(Boolean)))];
 
+  // শিটের প্রথম ৩টি ছবি অটোমেটিক 'নতুন' হিসেবে চিহ্নিত হবে
+  const newPhotoIds = new Set(photos.slice(0, 3).map((p) => p.id));
+
   const filteredPhotos = photos.filter(
     (p) => selectedAlbum === 'সব ছবি' || p.album === selectedAlbum
   );
@@ -258,6 +261,11 @@ export default function GalleryPage() {
                   <span className="absolute top-3 left-3 bg-black/60 backdrop-blur-xs text-white text-[11px] font-semibold px-2.5 py-1 rounded-lg">
                     {photo.album}
                   </span>
+                  {newPhotoIds.has(photo.id) && (
+                    <span className="absolute top-3 right-3 bg-gradient-to-r from-red-600 to-amber-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-md">
+                      ✨ নতুন
+                    </span>
+                  )}
                 </div>
 
                 <div className="p-4">

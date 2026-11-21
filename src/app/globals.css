@@ -26,3 +26,20 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes noticeScroll {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100vw);
+  }
+}
+
+.animate-notice-scroll {
+  animation: noticeScroll 14s linear infinite;
+}
+
+.animate-notice-scroll:hover {
+  animation-play-state: paused;
+}
