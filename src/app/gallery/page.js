@@ -10,7 +10,6 @@ const formatImageUrl = (url) => {
   const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
   const match = url.match(driveRegex);
   if (match && match[1]) {
-    // গুগলের অফিশিয়াল হাই-রেজোলিউশন ইমেজ লিংক
     return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
   }
   return url;
@@ -24,8 +23,10 @@ const toBanglaDigits = (num) => {
 export default function GalleryPage() {
   const ADMIN_PIN = '0000';
 
-  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/gviz/tq?tqx=out:csv';
+  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/gviz/tq?tqx=out:csv&gid=0';
+  const FORM_RESPONSES_CSV_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/gviz/tq?tqx=out:csv&gid=1338216814';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1oqiuDanj6k0jTiqPYzIdWe7nAVWuS1KPgOUNKjwOFiY/edit?usp=sharing';
+  const PHOTO_UPLOAD_FORM_URL = 'https://forms.gle/9uzx4Vxryax699wVA';
 
   const [selectedAlbum, setSelectedAlbum] = useState('সব ছবি');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -44,11 +45,38 @@ export default function GalleryPage() {
     setIsLoading(true);
     setIsError(false);
     try {
-      const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
-      const csvText = await response.text();
+      const [mainRes, formRes] = await Promise.all([
+        fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`${FORM_RESPONSES_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+      ]);
 
+      // ১. ফর্ম থেকে আসা নতুন ছবিগুলো পড়া (সবার আগে দেখাবে)
+      const parsedFormPhotos = [];
+      if (formRes && formRes.ok) {
+        const formText = await formRes.text();
+        const formLines = formText.trim().split(/\r?\n/);
+        for (let i = formLines.length - 1; i >= 1; i--) {
+          const line = formLines[i];
+          if (!line.trim()) continue;
+          const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
+            val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
+          );
+          if (cols.length >= 2 && cols[1]) {
+            parsedFormPhotos.push({
+              id: `form-${i}`,
+              imageUrl: formatImageUrl(cols[1]),
+              caption: cols[2] || 'পূজার স্মৃতি',
+              album: cols[3] ? cols[3].trim() : 'সাধারণ',
+              credit: cols[4] ? cols[4].trim() : '',
+            });
+          }
+        }
+      }
+
+      // ২. মূল শিট থেকে আগের ছবিগুলো পড়া
+      const csvText = await mainRes.text();
       const lines = csvText.trim().split(/\r?\n/);
-      const parsedPhotos = [];
+      const parsedMainPhotos = [];
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
@@ -59,16 +87,17 @@ export default function GalleryPage() {
         );
 
         if (cols.length >= 2 && cols[0]) {
-          parsedPhotos.push({
-            id: i,
+          parsedMainPhotos.push({
+            id: `main-${i}`,
             imageUrl: formatImageUrl(cols[0]),
             caption: cols[1] || 'পূজার স্মৃতি',
             album: cols[2] ? cols[2].trim() : 'সাধারণ',
+            credit: cols[3] ? cols[3].trim() : '',
           });
         }
       }
 
-      setPhotos(parsedPhotos);
+      setPhotos([...parsedFormPhotos, ...parsedMainPhotos]);
     } catch (error) {
       console.error('গ্যালারি লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
@@ -104,7 +133,7 @@ export default function GalleryPage() {
 
   const albums = ['সব ছবি', ...Array.from(new Set(photos.map((p) => p.album).filter(Boolean)))];
 
-  // শিটের প্রথম ৩টি ছবি অটোমেটিক 'নতুন' হিসেবে চিহ্নিত হবে
+  // সবার উপরের প্রথম ৩টি ছবি অটোমেটিক 'নতুন' হিসেবে চিহ্নিত হবে
   const newPhotoIds = new Set(photos.slice(0, 3).map((p) => p.id));
 
   const filteredPhotos = photos.filter(
@@ -200,7 +229,7 @@ export default function GalleryPage() {
           </div>
         </div>
 
-        {/* হেডার ব্যানার */}
+        {/* হেডার ব্যানার + ছবি আপলোড বাটন */}
         <div className="bg-gradient-to-r from-red-700 via-amber-600 to-red-700 text-white p-7 md:p-9 rounded-3xl shadow-lg mb-8 text-center">
           <h1 className="text-3xl md:text-5xl font-black tracking-tight">
             ফটো গ্যালারি
@@ -208,6 +237,16 @@ export default function GalleryPage() {
           <p className="text-amber-100 text-xs md:text-sm mt-2 max-w-md mx-auto">
             আমাদের নবীন মহাজন পাড়ার সকল পূজা ও মহোৎসবের আনন্দঘন মুহূর্তের আলোকচিত্রমালা।
           </p>
+          <div className="mt-5">
+            <a
+              href={PHOTO_UPLOAD_FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-white text-red-700 hover:bg-amber-50 font-bold text-xs sm:text-sm px-5 py-2.5 rounded-full shadow-md transition active:scale-95"
+            >
+              <span>📸</span> আপনার তোলা ছবি যোগ করুন
+            </a>
+          </div>
         </div>
 
         {/* অ্যালবাম ফিল্টার */}
@@ -272,6 +311,11 @@ export default function GalleryPage() {
                   <h3 className="font-bold text-sm text-gray-800 line-clamp-2">
                     {photo.caption}
                   </h3>
+                  {photo.credit && (
+                    <p className="text-[11px] text-gray-500 font-medium mt-1">
+                      📷 সৌজন্যে: {photo.credit}
+                    </p>
+                  )}
                   <span className="text-[11px] text-red-600 font-semibold mt-1 inline-block">
                     বড় করে দেখতে ক্লিক করুন ↗
                   </span>
@@ -335,6 +379,11 @@ export default function GalleryPage() {
               <span className="text-sm md:text-base font-semibold">
                 {selectedImage.caption}
               </span>
+              {selectedImage.credit && (
+                <p className="text-xs text-amber-200 mt-1 font-medium">
+                  📷 সৌজন্যে: {selectedImage.credit}
+                </p>
+              )}
             </div>
           </div>
 
