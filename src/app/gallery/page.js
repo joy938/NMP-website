@@ -1,16 +1,15 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
-// গুগল ড্রাইভের জন্য সবচেয়ে নির্ভরযোগ্য হাই-স্পিড ইমেজ লিংক কনভার্টার
-const formatImageUrl = (url) => {
+const formatImageUrl = (url, size = 'w600') => {
   if (!url) return '';
   const driveRegex = /(?:drive\.google\.com\/(?:file\/d\/|open\?id=)|lh3\.googleusercontent\.com\/d\/)([a-zA-Z0-9_-]+)/;
   const match = url.match(driveRegex);
   if (match && match[1]) {
-    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
+    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=${size}`;
   }
   return url;
 };
@@ -31,6 +30,8 @@ export default function GalleryPage() {
   const [selectedAlbum, setSelectedAlbum] = useState('সব ছবি');
   const [selectedImage, setSelectedImage] = useState(null);
   const [touchStartX, setTouchStartX] = useState(null);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const lastTapRef = useRef(0);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -41,8 +42,8 @@ export default function GalleryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  const fetchGalleryData = async () => {
-    setIsLoading(true);
+  const fetchGalleryData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setIsError(false);
     try {
       const [mainRes, formRes] = await Promise.all([
@@ -50,7 +51,6 @@ export default function GalleryPage() {
         fetch(`${FORM_RESPONSES_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
       ]);
 
-      // ১. ফর্ম থেকে আসা নতুন ছবিগুলো পড়া (সবার আগে দেখাবে)
       const parsedFormPhotos = [];
       if (formRes && formRes.ok) {
         const formText = await formRes.text();
@@ -64,7 +64,8 @@ export default function GalleryPage() {
           if (cols.length >= 2 && cols[1]) {
             parsedFormPhotos.push({
               id: `form-${i}`,
-              imageUrl: formatImageUrl(cols[1]),
+              imageUrl: formatImageUrl(cols[1], 'w600'),
+              fullImageUrl: formatImageUrl(cols[1], 'w1200'),
               caption: cols[2] || 'পূজার স্মৃতি',
               album: cols[3] ? cols[3].trim() : 'সাধারণ',
               credit: cols[4] ? cols[4].trim() : '',
@@ -73,7 +74,6 @@ export default function GalleryPage() {
         }
       }
 
-      // ২. মূল শিট থেকে আগের ছবিগুলো পড়া
       const csvText = await mainRes.text();
       const lines = csvText.trim().split(/\r?\n/);
       const parsedMainPhotos = [];
@@ -89,7 +89,8 @@ export default function GalleryPage() {
         if (cols.length >= 2 && cols[0]) {
           parsedMainPhotos.push({
             id: `main-${i}`,
-            imageUrl: formatImageUrl(cols[0]),
+            imageUrl: formatImageUrl(cols[0], 'w600'),
+            fullImageUrl: formatImageUrl(cols[0], 'w1200'),
             caption: cols[1] || 'পূজার স্মৃতি',
             album: cols[2] ? cols[2].trim() : 'সাধারণ',
             credit: cols[3] ? cols[3].trim() : '',
@@ -97,10 +98,14 @@ export default function GalleryPage() {
         }
       }
 
-      setPhotos([...parsedFormPhotos, ...parsedMainPhotos]);
+      const combined = [...parsedFormPhotos, ...parsedMainPhotos];
+      setPhotos(combined);
+      try {
+        localStorage.setItem('nmp_cache_gallery', JSON.stringify(combined));
+      } catch {}
     } catch (error) {
       console.error('গ্যালারি লোড করতে সমস্যা হয়েছে:', error);
-      setIsError(true);
+      if (!silent) setIsError(true);
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +115,21 @@ export default function GalleryPage() {
     if (sessionStorage.getItem('nmp_is_admin') === 'true') {
       setIsAdmin(true);
     }
-    fetchGalleryData();
+
+    let hasCache = false;
+    try {
+      const cached = localStorage.getItem('nmp_cache_gallery');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPhotos(parsed);
+          setIsLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    fetchGalleryData(hasCache);
   }, []);
 
   const handleAdminLogin = (e) => {
@@ -132,8 +151,6 @@ export default function GalleryPage() {
   };
 
   const albums = ['সব ছবি', ...Array.from(new Set(photos.map((p) => p.album).filter(Boolean)))];
-
-  // সবার উপরের প্রথম ৩টি ছবি অটোমেটিক 'নতুন' হিসেবে চিহ্নিত হবে
   const newPhotoIds = new Set(photos.slice(0, 3).map((p) => p.id));
 
   const filteredPhotos = photos.filter(
@@ -144,15 +161,22 @@ export default function GalleryPage() {
     ? filteredPhotos.findIndex((p) => p.id === selectedImage.id)
     : -1;
 
+  const closeLightbox = () => {
+    setSelectedImage(null);
+    setIsZoomed(false);
+  };
+
   const handlePrev = () => {
     if (filteredPhotos.length <= 1 || currentIndex === -1) return;
     const prevIdx = (currentIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
+    setIsZoomed(false);
     setSelectedImage(filteredPhotos[prevIdx]);
   };
 
   const handleNext = () => {
     if (filteredPhotos.length <= 1 || currentIndex === -1) return;
     const nextIdx = (currentIndex + 1) % filteredPhotos.length;
+    setIsZoomed(false);
     setSelectedImage(filteredPhotos[nextIdx]);
   };
 
@@ -161,22 +185,34 @@ export default function GalleryPage() {
     const onKeyDown = (e) => {
       if (e.key === 'ArrowLeft') handlePrev();
       else if (e.key === 'ArrowRight') handleNext();
-      else if (e.key === 'Escape') setSelectedImage(null);
+      else if (e.key === 'Escape') closeLightbox();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedImage, currentIndex, filteredPhotos.length]);
 
   const handleTouchStart = (e) => {
+    if (isZoomed) return;
     setTouchStartX(e.touches[0].clientX);
   };
 
   const handleTouchEnd = (e) => {
-    if (touchStartX === null) return;
+    if (isZoomed || touchStartX === null) return;
     const diff = touchStartX - e.changedTouches[0].clientX;
     if (diff > 50) handleNext();
     else if (diff < -50) handlePrev();
     setTouchStartX(null);
+  };
+
+  const handleImageTap = (e) => {
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastTapRef.current < 320) {
+      setIsZoomed((prev) => !prev);
+      lastTapRef.current = 0;
+    } else {
+      lastTapRef.current = now;
+    }
   };
 
   return (
@@ -219,7 +255,7 @@ export default function GalleryPage() {
             )}
 
             <button
-              onClick={fetchGalleryData}
+              onClick={() => fetchGalleryData(false)}
               disabled={isLoading}
               title="নতুন ছবি লোড করতে ক্লিক করুন"
               className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
@@ -250,14 +286,14 @@ export default function GalleryPage() {
         </div>
 
         {/* অ্যালবাম ফিল্টার */}
-        <div className="flex flex-wrap gap-2 mb-8 justify-center">
+        <div className="w-fit max-w-full mx-auto flex items-center gap-2 mb-8 overflow-x-auto pb-2">
           {albums.map((album) => {
             const isActive = selectedAlbum === album;
             return (
               <button
                 key={album}
                 onClick={() => setSelectedAlbum(album)}
-                className={`px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition shadow-xs ${
+                className={`px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition shadow-xs shrink-0 whitespace-nowrap ${
                   isActive
                     ? 'bg-red-700 text-white shadow-md'
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
@@ -287,8 +323,11 @@ export default function GalleryPage() {
             {filteredPhotos.map((photo) => (
               <div
                 key={photo.id}
-                onClick={() => setSelectedImage(photo)}
-                className="bg-white rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-xl transition duration-300 group cursor-pointer flex flex-col justify-between"
+                onClick={() => {
+                  setIsZoomed(false);
+                  setSelectedImage(photo);
+                }}
+                className="bg-white rounded-3xl overflow-hidden border border-gray-200/80 shadow-md hover:shadow-2xl transition duration-300 group cursor-pointer flex flex-col justify-between"
               >
                 <div className="relative h-56 md:h-64 overflow-hidden bg-gray-100 flex items-center justify-center">
                   <img
@@ -305,6 +344,12 @@ export default function GalleryPage() {
                       ✨ নতুন
                     </span>
                   )}
+                  <span
+                    className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-black/45 backdrop-blur-md border border-white/25 text-white text-sm flex items-center justify-center shadow-md group-hover:bg-red-700/85 group-hover:scale-110 transition duration-200"
+                    title="বড় করে দেখুন"
+                  >
+                    ⤢
+                  </span>
                 </div>
 
                 <div className="p-4">
@@ -316,9 +361,6 @@ export default function GalleryPage() {
                       📷 সৌজন্যে: {photo.credit}
                     </p>
                   )}
-                  <span className="text-[11px] text-red-600 font-semibold mt-1 inline-block">
-                    বড় করে দেখতে ক্লিক করুন ↗
-                  </span>
                 </div>
               </div>
             ))}
@@ -327,15 +369,14 @@ export default function GalleryPage() {
 
       </div>
 
-      {/* ফুলস্ক্রিন ভিউ (Swipe + < > বাটন সহ) */}
+      {/* ফুলস্ক্রিন ভিউ */}
       {selectedImage && (
         <div
           className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4 select-none"
-          onClick={() => setSelectedImage(null)}
+          onClick={closeLightbox}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
-          {/* ছবির নম্বর কাউন্টার */}
           {currentIndex !== -1 && (
             <div className="absolute top-5 left-5 bg-black/60 border border-white/20 text-white text-xs sm:text-sm font-bold px-3 py-1 rounded-full">
               {toBanglaDigits(currentIndex + 1)} / {toBanglaDigits(filteredPhotos.length)}
@@ -343,14 +384,13 @@ export default function GalleryPage() {
           )}
 
           <button
-            onClick={() => setSelectedImage(null)}
+            onClick={closeLightbox}
             className="absolute top-5 right-5 text-white/80 hover:text-white text-2xl sm:text-3xl font-bold bg-black/50 w-10 h-10 rounded-full flex items-center justify-center"
           >
             ✕
           </button>
 
-          {/* বাম পাশের < বাটন */}
-          {filteredPhotos.length > 1 && (
+          {!isZoomed && filteredPhotos.length > 1 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -364,14 +404,30 @@ export default function GalleryPage() {
           )}
 
           <div
-            className="max-w-4xl max-h-[80vh] flex flex-col items-center px-8 sm:px-14"
+            className={`max-w-4xl max-h-[80vh] flex flex-col items-center ${
+              isZoomed ? 'px-2' : 'px-8 sm:px-14'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={selectedImage.imageUrl}
-              alt={selectedImage.caption}
-              className="max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl"
-            />
+            <div
+              className={
+                isZoomed
+                  ? 'max-h-[75vh] max-w-[92vw] overflow-auto rounded-xl shadow-2xl'
+                  : 'flex items-center justify-center'
+              }
+            >
+              <img
+                src={selectedImage.fullImageUrl || selectedImage.imageUrl}
+                alt={selectedImage.caption}
+                onClick={handleImageTap}
+                className={
+                  isZoomed
+                    ? 'w-[180%] max-w-none rounded-xl cursor-zoom-out select-none'
+                    : 'max-w-full max-h-[75vh] object-contain rounded-xl shadow-2xl cursor-zoom-in select-none'
+                }
+              />
+            </div>
+
             <div className="mt-3 text-center text-white">
               <span className="text-xs bg-red-600 px-2 py-0.5 rounded font-bold mr-2">
                 {selectedImage.album}
@@ -387,8 +443,7 @@ export default function GalleryPage() {
             </div>
           </div>
 
-          {/* ডান পাশের > বাটন */}
-          {filteredPhotos.length > 1 && (
+          {!isZoomed && filteredPhotos.length > 1 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

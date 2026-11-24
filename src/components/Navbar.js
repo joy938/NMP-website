@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -7,10 +7,14 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
   // নেভবারে 'পূজার খরচ' সহ পূর্ণাঙ্গ মেনু তালিকা
   const navLinks = [
     { name: 'হোম', href: '/' },
-    { name: 'পূজার সময়সূচী', href: '/schedule' },
+    { name: 'পূজার সময়সূচী', href: '/schedule' },
     { name: 'সংঘের বিবরণ', href: '/sangha' },
     { name: 'পূজার প্রণামী', href: '/pronami' },
     { name: 'পূজার খরচ', href: '/expenses' },
@@ -18,25 +22,28 @@ export default function Navbar() {
     { name: 'স্মরণিকা', href: '/smaranika' },
   ];
 
+  const checkActive = (href) =>
+    href === '/' ? pathname === '/' : pathname.startsWith(href);
+
   return (
     <nav className="bg-red-700 text-white shadow-md sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex justify-between items-center h-16 relative">
         
         {/* মোবাইলের স্পেস */}
-        <div className="w-8 md:hidden"></div>
+        <div className="w-10 md:hidden"></div>
 
-        {/* মাঝখানে পাড়ার নাম */}
+        {/* মাঝখানে পাড়ার নাম */}
         <Link 
           href="/" 
-          className="font-bold text-lg md:text-2xl tracking-wide md:static absolute left-1/2 -translate-x-1/2 md:translate-x-0 hover:text-yellow-200 transition"
+          className="font-bold text-base sm:text-lg md:text-2xl tracking-wide whitespace-nowrap md:static absolute left-1/2 -translate-x-1/2 md:translate-x-0 hover:text-yellow-200 transition"
         >
-          নবীন মহাজন পাড়া
+          নবীন মহাজন পাড়া
         </Link>
 
         {/* ল্যাপটপ/ডেস্কটপ মেনু (অ্যাক্টিভ পেজ হাইলাইট ও হোভার সহ) */}
         <div className="hidden md:flex items-center space-x-1 lg:space-x-2 text-sm">
           {navLinks.map((link) => {
-            const isActive = pathname === link.href;
+            const isActive = checkActive(link.href);
 
             return (
               <Link
@@ -58,8 +65,9 @@ export default function Navbar() {
         <div className="md:hidden">
           <button 
             onClick={() => setIsOpen(!isOpen)} 
-            className="p-2 text-2xl focus:outline-none"
+            className="p-2 text-2xl focus:outline-none cursor-pointer"
             aria-label="Toggle Menu"
+            aria-expanded={isOpen}
           >
             {isOpen ? '✕' : '☰'}
           </button>
@@ -68,9 +76,9 @@ export default function Navbar() {
 
       {/* মোবাইল ড্রপডাউন মেনু */}
       {isOpen && (
-        <div className="md:hidden bg-red-800 px-4 pt-2 pb-4 space-y-1.5 text-center text-sm shadow-xl">
+        <div className="md:hidden bg-red-800 px-4 pt-2 pb-4 space-y-1.5 text-center text-sm shadow-xl max-h-[80vh] overflow-y-auto">
           {navLinks.map((link) => {
-            const isActive = pathname === link.href;
+            const isActive = checkActive(link.href);
 
             return (
               <Link

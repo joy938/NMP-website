@@ -2,20 +2,67 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+const ADMIN_PIN = '0000';
+const GOOGLE_SHEET_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
+const GOOGLE_SHEET_EDIT_URL =
+  'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/edit?usp=sharing';
+
+const defaultInfo = {
+  title: 'শ্রী শ্রী কার্তিক পূজা',
+  dateText: '১৭ নভেম্বর, ২০২৬',
+  targetDate: '2026-11-17T09:00:00+06:00',
+  venue: 'নবীন মহাজন পাড়া পূজা প্রাঙ্গণ',
+  notice: 'সকল পাড়াবাসী ও ভক্তবৃন্দকে সপরিবারে উপস্থিত থাকার জন্য বিনীত নিমন্ত্রণ জানানো হচ্ছে।',
+};
+
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell.trim());
+      if (row.some((c) => c !== '')) rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some((c) => c !== '')) rows.push(row);
+  }
+  return rows;
+};
+
+const normalizeTargetDate = (raw) => {
+  const clean = String(raw || '').trim();
+  if (!clean) return defaultInfo.targetDate;
+  const withTime = clean.includes('T') ? clean : `${clean}T09:00:00`;
+  const withTz = /(?:Z|[+-]\d{2}:\d{2})$/.test(withTime) ? withTime : `${withTime}+06:00`;
+  const testDate = new Date(withTz);
+  return isNaN(testDate.getTime()) ? defaultInfo.targetDate : withTz;
+};
+
 export default function UpcomingPuja() {
-  const ADMIN_PIN = '0000';
-
-  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
-  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/edit?usp=sharing';
-
-  const defaultInfo = {
-    title: 'শ্রী শ্রী কার্তিক পূজা',
-    dateText: '১৭ নভেম্বর, ২০২৬',
-    targetDate: '2026-11-17T09:00:00',
-    venue: 'নবীন মহাজন পাড়া পূজা প্রাঙ্গণ',
-    notice: 'সকল পাড়াবাসী ও ভক্তবৃন্দকে সপরিবারে উপস্থিত থাকার জন্য বিনীত নিমন্ত্রণ জানানো হচ্ছে।',
-  };
-
   const [info, setInfo] = useState(defaultInfo);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [pujaStatus, setPujaStatus] = useState('upcoming'); // 'upcoming' | 'today' | 'finished'
@@ -26,26 +73,26 @@ export default function UpcomingPuja() {
   const [pinError, setPinError] = useState('');
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
+
     const fetchUpcomingPuja = async () => {
       try {
         const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+
         const csvText = await response.text();
+        const rows = parseCSV(csvText);
 
-        const lines = csvText.trim().split(/\r?\n/);
-        if (lines.length >= 2) {
-          const cols = lines[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-            val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-          );
-
+        if (rows.length >= 2) {
+          const cols = rows[1];
           if (cols.length >= 4 && cols[0]) {
-            const rawTargetDate = cols[2] || '2026-11-17';
-            const formattedDate = rawTargetDate.includes('T') ? rawTargetDate : `${rawTargetDate}T09:00:00`;
-
             setInfo({
               title: cols[0],
               dateText: cols[1] || 'আসন্ন পূজা',
-              targetDate: formattedDate,
-              venue: cols[3] || 'নবীন মহাজন পাড়া পূজা প্রাঙ্গণ',
+              targetDate: normalizeTargetDate(cols[2]),
+              venue: cols[3] || 'নবীন মহাজন পাড়া পূজা প্রাঙ্গণ',
               notice: cols[4] || 'সকলের উপস্থিতি কামনা করছি।',
             });
           }
@@ -59,9 +106,16 @@ export default function UpcomingPuja() {
   }, []);
 
   useEffect(() => {
+    let timer = null;
+
     const calculateTime = () => {
       const now = new Date();
       const target = new Date(info.targetDate);
+      if (isNaN(target.getTime())) {
+        setPujaStatus('finished');
+        return;
+      }
+
       const endOfPujaDay = new Date(target);
       endOfPujaDay.setHours(23, 59, 59, 999);
 
@@ -76,25 +130,27 @@ export default function UpcomingPuja() {
           seconds: Math.floor((difference / 1000) % 60),
         });
       } else if (now <= endOfPujaDay) {
-        // পূজার দিন সকাল ৯টার পর থেকে রাত ১২টা পর্যন্ত বিশেষ উৎসব বার্তা
         setPujaStatus('today');
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       } else {
-        // পরের দিন থেকে "সফলভাবে সম্পন্ন হয়েছে"
         setPujaStatus('finished');
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        if (timer) clearInterval(timer);
       }
     };
 
     calculateTime();
-    const timer = setInterval(calculateTime, 1000);
-    return () => clearInterval(timer);
+    timer = setInterval(calculateTime, 1000);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [info.targetDate]);
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
@@ -103,14 +159,19 @@ export default function UpcomingPuja() {
     }
   };
 
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
+  };
+
   return (
     <section className="max-w-4xl mx-auto px-4 py-8">
       
       <div className="bg-white border-2 border-amber-400 rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
         
         {/* টপ ব্যাজ */}
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
             <span className={`text-xs uppercase font-extrabold px-3 py-1 rounded-full shadow-sm ${
               pujaStatus === 'today'
                 ? 'bg-green-600 text-white animate-pulse'
@@ -131,7 +192,7 @@ export default function UpcomingPuja() {
 
           <div>
             {isAdmin ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <a
                   href={GOOGLE_SHEET_EDIT_URL}
                   target="_blank"
@@ -141,8 +202,8 @@ export default function UpcomingPuja() {
                   <span>📊</span> শিটে পরবর্তী পূজা সেট করুন
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-full"
+                  onClick={handleAdminLogout}
+                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-full cursor-pointer"
                 >
                   লগআউট
                 </button>
@@ -150,7 +211,7 @@ export default function UpcomingPuja() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs text-amber-800 hover:text-amber-950 bg-amber-100/70 border border-amber-300 px-2.5 py-1 rounded-full font-semibold transition"
+                className="text-xs text-amber-800 hover:text-amber-950 bg-amber-100/70 border border-amber-300 px-2.5 py-1 rounded-full font-semibold transition cursor-pointer"
               >
                 🔒 এডিট
               </button>
@@ -169,7 +230,7 @@ export default function UpcomingPuja() {
             <span>📍 {info.venue}</span>
           </div>
           <p className="text-gray-600 text-xs md:text-sm mt-3 max-w-lg mx-auto italic">
-            "{info.notice}"
+            “{info.notice}”
           </p>
 
           {pujaStatus === 'today' ? (
@@ -179,17 +240,17 @@ export default function UpcomingPuja() {
                 আজ শুভ {info.title}!
               </h3>
               <p className="text-xs md:text-sm text-amber-900 mt-1 font-semibold">
-                মণ্ডপে পুষ্পাঞ্জলি ও মহাপ্রসাদে আসার সাদর আমন্ত্রণ। সকলের জীবন মঙ্গলময় হোক!
+                মণ্ডপে পুষ্পাঞ্জলি ও মহাপ্রসাদে আসার সাদর আমন্ত্রণ। সকলের জীবন মঙ্গলময় হোক!
               </p>
             </div>
           ) : pujaStatus === 'finished' ? (
             <div className="bg-amber-100/80 border border-amber-300 rounded-2xl p-5 max-w-lg mx-auto my-6 text-center shadow-inner">
               <span className="text-3xl block mb-1">🎉</span>
               <h3 className="font-bold text-red-800 text-base md:text-lg">
-                {info.title} সফলভাবে সম্পন্ন হয়েছে!
+                {info.title} সফলভাবে সম্পন্ন হয়েছে!
               </h3>
               <p className="text-xs md:text-sm text-amber-900 mt-1 font-medium">
-                সকল পাড়াবাসী ও ভক্তবৃন্দকে জানাই আন্তরিক প্রীতি ও শুভেচ্ছা। পরবর্তী পূজার দিনক্ষণ ও সময়সূচী শীঘ্রই জানানো হবে।
+                সকল পাড়াবাসী ও ভক্তবৃন্দকে জানাই আন্তরিক প্রীতি ও শুভেচ্ছা। পরবর্তী পূজার দিনক্ষণ ও সময়সূচী শীঘ্রই জানানো হবে।
               </p>
             </div>
           ) : (
@@ -248,6 +309,7 @@ export default function UpcomingPuja() {
             <form onSubmit={handleAdminLogin}>
               <input
                 type="password"
+                inputMode="numeric"
                 placeholder="••••"
                 maxLength={4}
                 value={pinInput}
@@ -261,13 +323,13 @@ export default function UpcomingPuja() {
                 <button
                   type="button"
                   onClick={() => { setShowPinModal(false); setPinError(''); setPinInput(''); }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg"
+                  className="px-4 py-2 text-sm bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg cursor-pointer"
                 >
                   প্রবেশ করুন
                 </button>

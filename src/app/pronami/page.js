@@ -14,6 +14,9 @@ const toNumber = (str) => {
   return Number(en) || 0;
 };
 
+const normalizeBn = (str) =>
+  String(str || '').normalize('NFC').toLowerCase().trim();
+
 const normalizePuja = (str) =>
   String(str || '')
     .normalize('NFC')
@@ -47,8 +50,8 @@ export default function PronamiPage() {
   const [dueCopied, setDueCopied] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState(null);
 
-  const fetchGoogleSheetData = async () => {
-    setIsLoading(true);
+  const fetchGoogleSheetData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setIsError(false);
     try {
       const [response, upcomingRes] = await Promise.all([
@@ -57,6 +60,7 @@ export default function PronamiPage() {
       ]);
 
       let upcomingPujaName = '';
+      let detectedYear = null;
       if (upcomingRes && upcomingRes.ok) {
         const upText = await upcomingRes.text();
         const upLines = upText.trim().split(/\r?\n/);
@@ -67,7 +71,10 @@ export default function PronamiPage() {
           if (upCols[0]) upcomingPujaName = upCols[0];
           const yearMatch = (upCols[2] || upCols[1] || '').match(/[০-৯\d]{4}/)?.[0];
           const convertedYear = toNumber(yearMatch);
-          if (convertedYear) setSelectedYear(convertedYear);
+          if (convertedYear) {
+            detectedYear = convertedYear;
+            setSelectedYear(convertedYear);
+          }
         }
       }
 
@@ -97,38 +104,75 @@ export default function PronamiPage() {
 
       setRecords(parsedRecords);
 
+      let matchedPuja = null;
       if (upcomingPujaName) {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedRecords.map((r) => r.puja).filter(Boolean)])
         );
         const normUp = normalizePuja(upcomingPujaName);
-        const matchedPuja =
+        matchedPuja =
           allPujas.find((p) => normalizePuja(p) === normUp) ||
           allPujas.find((p) => normUp.includes(normalizePuja(p)) || normalizePuja(p).includes(normUp));
         if (matchedPuja) setSelectedPuja(matchedPuja);
       }
+
+      try {
+        localStorage.setItem(
+          'nmp_cache_pronami',
+          JSON.stringify({
+            records: parsedRecords,
+            defaultPuja: matchedPuja,
+            defaultYear: detectedYear,
+          })
+        );
+      } catch {}
     } catch (error) {
       console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
-      setIsError(true);
+      if (!silent) setIsError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchGoogleSheetData();
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
+
+    let hasCache = false;
+    try {
+      const cached = localStorage.getItem('nmp_cache_pronami');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed.records) && parsed.records.length > 0) {
+          setRecords(parsed.records);
+          if (parsed.defaultPuja) setSelectedPuja(parsed.defaultPuja);
+          if (parsed.defaultYear) setSelectedYear(parsed.defaultYear);
+          setIsLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    fetchGoogleSheetData(hasCache);
   }, []);
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
     } else {
       setPinError('ভুল পিন কোড!');
     }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
   };
 
   const pujas = Array.from(
@@ -143,14 +187,14 @@ export default function PronamiPage() {
 
   const totalPledged = allYearRecords.reduce((sum, r) => sum + r.pledged, 0);
   const totalPaid = allYearRecords.reduce((sum, r) => sum + r.paid, 0);
-  const totalDue = totalPledged - totalPaid;
+  const totalDue = allYearRecords.reduce((sum, r) => sum + Math.max(0, r.pledged - r.paid), 0);
 
   const filteredRecords = allYearRecords.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+    normalizeBn(r.name).includes(normalizeBn(searchQuery))
   );
 
   const handleCopyDueList = async () => {
-    const dueRecords = allYearRecords.filter((r) => !(r.pledged - r.paid <= 0 && r.pledged > 0));
+    const dueRecords = allYearRecords.filter((r) => !(r.pledged - r.paid <= 0 && (r.pledged > 0 || r.paid > 0)));
     if (dueRecords.length === 0) {
       alert('কোনো বকেয়া নেই!');
       return;
@@ -175,12 +219,11 @@ export default function PronamiPage() {
     }
   };
 
-  // নির্বাচিত ব্যক্তির সারা বছরের সব পূজার হিসাব
   const personYearPujas = selectedPerson
     ? pujas.map((p) => {
         const matches = records.filter(
           (r) =>
-            r.name === selectedPerson &&
+            normalizeBn(r.name) === normalizeBn(selectedPerson) &&
             normalizePuja(r.puja) === normalizePuja(p) &&
             Number(r.year) === Number(selectedYear)
         );
@@ -206,7 +249,7 @@ export default function PronamiPage() {
         <Navbar />
       </div>
 
-      {/* 🖨️ শুধুমাত্র প্রিন্ট / PDF করার সময় ব্যাকগ্রাউন্ডে আবছা লোগো দেখাবে */}
+      {/* প্রিন্ট / PDF ওয়াটারমার্ক */}
       <div className="hidden print:flex fixed inset-0 items-center justify-center pointer-events-none z-0">
         <img
           src="/logo.png"
@@ -249,7 +292,7 @@ export default function PronamiPage() {
                   <span>📊</span> শিট এডিট
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleAdminLogout}
                   className="text-[11px] sm:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1.5 rounded-full"
                 >
                   লগআউট
@@ -265,7 +308,7 @@ export default function PronamiPage() {
             )}
 
             <button
-              onClick={fetchGoogleSheetData}
+              onClick={() => fetchGoogleSheetData(false)}
               disabled={isLoading}
               title="নতুন ডাটা লোড করতে ক্লিক করুন"
               className="text-[11px] sm:text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2.5 sm:px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
@@ -354,14 +397,14 @@ export default function PronamiPage() {
             </div>
           </div>
 
-          {/* 🔍 লাইভ সার্চ বার */}
+          {/* সার্চ বার */}
           <div className="relative mb-4 print:hidden">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
               🔍
             </span>
             <input
               type="text"
-              placeholder="নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুৎ, সুকুমার, দিপক)..."
+              placeholder="নাম দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm border border-gray-300 rounded-xl outline-none focus:border-amber-600 bg-gray-50 focus:bg-white transition"
@@ -415,7 +458,7 @@ export default function PronamiPage() {
                         <tr
                           key={r.id}
                           onClick={() => setSelectedPerson(r.name)}
-                          className="hover:bg-amber-50/70 cursor-pointer transition-colors"
+                          className="even:bg-orange-100/50 hover:bg-orange-100 cursor-pointer transition-colors"
                         >
                           <td className="py-2.5 px-1 sm:px-3 text-center text-gray-400 text-[11px] sm:text-xs">
                             {index + 1}
@@ -433,7 +476,7 @@ export default function PronamiPage() {
                             {due > 0 ? due : '০'}
                           </td>
                           <td className="py-2.5 px-1 sm:px-3 text-center whitespace-nowrap">
-                            {due <= 0 && r.pledged > 0 ? (
+                            {due <= 0 && (r.pledged > 0 || r.paid > 0) ? (
                               <span className="bg-green-100 text-green-700 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
                                 ✓ পরিশোধিত
                               </span>
@@ -487,7 +530,7 @@ export default function PronamiPage() {
                   <span className="font-semibold text-gray-800">{item.puja}</span>
                   {!item.hasRecord ? (
                     <span className="text-gray-400 font-medium">—</span>
-                  ) : item.due <= 0 && item.pledged > 0 ? (
+                  ) : item.due <= 0 && (item.pledged > 0 || item.paid > 0) ? (
                     <span className="bg-green-100 text-green-700 font-bold px-2.5 py-0.5 rounded-full text-xs">
                       ✓ {item.paid} ৳
                     </span>

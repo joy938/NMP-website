@@ -4,6 +4,12 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
+const ADMIN_PIN = '0000';
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/195i0GHHAcqHF4-ozdwHWMD9JFXad5XdZZUbHmzadeOM/gviz/tq?tqx=out:csv&gid=0';
+const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/195i0GHHAcqHF4-ozdwHWMD9JFXad5XdZZUbHmzadeOM/edit?usp=sharing';
+const FORM_RESPONSES_URL = 'https://docs.google.com/spreadsheets/d/195i0GHHAcqHF4-ozdwHWMD9JFXad5XdZZUbHmzadeOM/edit#gid=885182989';
+const FORM_URL = 'https://forms.gle/EB5DWj56avu6H58r5';
+
 // গুগল ড্রাইভ লিংককে স্বয়ংক্রিয়ভাবে সরাসরি ছবিতে রূপান্তর করার ফাংশন
 const formatImageUrl = (url) => {
   if (!url) return '';
@@ -24,6 +30,49 @@ const toEnglishDigits = (str) => {
   return String(str).replace(/[০-৯]/g, (d) => bn[d]);
 };
 
+// সর্টিং ও ফিল্টারের জন্য ইংরেজি সংখ্যা হিসেবে বছর বের করা
+const getNumericYear = (yearStr, dateStr = '') => {
+  const match = toEnglishDigits(yearStr || dateStr).match(/\b(19\d{2}|20\d{2})\b/);
+  return match ? parseInt(match[0], 10) : 0;
+};
+
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell.trim());
+      if (row.some((c) => c !== '')) rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some((c) => c !== '')) rows.push(row);
+  }
+  return rows;
+};
+
 // প্রয়াণের তারিখ আজকের তারিখের সাথে মিলছে কি না তা যাচাই
 const isTodayAnniversary = (dateStr, today) => {
   if (!dateStr || !today) return false;
@@ -33,14 +82,14 @@ const isTodayAnniversary = (dateStr, today) => {
   const todayMonth = today.getMonth();
 
   const monthGroups = [
-    ['জানুয়ারি', 'জানুয়ারি', 'january', 'jan'],
-    ['ফেব্রুয়ারি', 'ফেব্রুয়ারি', 'february', 'feb'],
+    ['জানুয়ারি', 'জানুয়ারী', 'january', 'jan'],
+    ['ফেব্রুয়ারি', 'ফেব্রুয়ারী', 'february', 'feb'],
     ['মার্চ', 'march', 'mar'],
     ['এপ্রিল', 'april', 'apr'],
     ['মে', 'may'],
     ['জুন', 'june', 'jun'],
     ['জুলাই', 'july', 'jul'],
-    ['আগস্ট', 'august', 'aug'],
+    ['আগস্ট', 'অগাস্ট', 'august', 'aug'],
     ['সেপ্টেম্বর', 'september', 'sep'],
     ['অক্টোবর', 'october', 'oct'],
     ['নভেম্বর', 'november', 'nov'],
@@ -61,6 +110,13 @@ const isTodayAnniversary = (dateStr, today) => {
       const day = parseInt(nums[0], 10);
       return day === todayDay && matchedMonth === todayMonth;
     }
+  }
+
+  const isoMatch = clean.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (isoMatch) {
+    const month = parseInt(isoMatch[2], 10) - 1;
+    const day = parseInt(isoMatch[3], 10);
+    return day === todayDay && month === todayMonth;
   }
 
   const slashMatch = clean.match(/(\d{1,2})[\/\-](\d{1,2})/);
@@ -88,15 +144,11 @@ const getYearsAgoLabel = (yearStr, dateStr, today) => {
 };
 
 export default function SmaranikaPage() {
-  const ADMIN_PIN = '0000';
-
-  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/195i0GHHAcqHF4-ozdwHWMD9JFXad5XdZZUbHmzadeOM/gviz/tq?tqx=out:csv';
-  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/195i0GHHAcqHF4-ozdwHWMD9JFXad5XdZZUbHmzadeOM/edit?usp=sharing';
-
   const [selectedYear, setSelectedYear] = useState('সব');
   const [searchQuery, setSearchQuery] = useState('');
 
   const [litDiyas, setLitDiyas] = useState({});
+  const [failedPhotos, setFailedPhotos] = useState({});
   const [today, setToday] = useState(null);
   const [selectedSoul, setSelectedSoul] = useState(null);
 
@@ -114,32 +166,33 @@ export default function SmaranikaPage() {
     setIsError(false);
     try {
       const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Sheet fetch failed');
       const csvText = await response.text();
 
-      const lines = csvText.trim().split(/\r?\n/);
+      const rows = parseCSV(csvText);
       const parsed = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-        );
-
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i];
         if (cols.length >= 2 && cols[0]) {
+          const numYr = getNumericYear(cols[2], cols[1]);
           parsed.push({
             id: i,
+            key: normalizeBn(cols[0]),
             name: cols[0],
             date: cols[1] || 'তারিখ জানা নেই',
-            year: cols[2] ? cols[2].trim() : '',
+            year: numYr ? String(numYr) : (cols[2] ? toEnglishDigits(cols[2]).trim() : ''),
             photoUrl: formatImageUrl(cols[3] || ''),
             details: cols[4] || '',
           });
         }
       }
 
+      // সাল অনুযায়ী সাজানো: নতুন বছর আগে, পুরনো বছর পরে
+      parsed.sort((a, b) => getNumericYear(b.year, b.date) - getNumericYear(a.year, a.date));
+
       setSouls(parsed);
+      setFailedPhotos({});
     } catch (error) {
       console.error('স্মরণিকা লোড করতে সমস্যা হয়েছে:', error);
       setIsError(true);
@@ -155,20 +208,20 @@ export default function SmaranikaPage() {
     }
     fetchSmaranikaData();
 
-    const savedDiyas = localStorage.getItem('lit_diyas_status');
-    if (savedDiyas) {
-      try {
+    try {
+      const savedDiyas = localStorage.getItem('lit_diyas_status');
+      if (savedDiyas) {
         setLitDiyas(JSON.parse(savedDiyas));
-      } catch (e) {
-        console.error(e);
       }
-    }
+    } catch {}
   }, []);
 
-  const handleLightDiya = (id) => {
-    const updated = { ...litDiyas, [id]: true };
+  const handleLightDiya = (soul) => {
+    const updated = { ...litDiyas, [soul.key]: true, [soul.id]: true };
     setLitDiyas(updated);
-    localStorage.setItem('lit_diyas_status', JSON.stringify(updated));
+    try {
+      localStorage.setItem('lit_diyas_status', JSON.stringify(updated));
+    } catch {}
   };
 
   const handleAdminLogin = (e) => {
@@ -190,7 +243,7 @@ export default function SmaranikaPage() {
   };
 
   const availableYears = Array.from(new Set(souls.map((s) => s.year).filter(Boolean))).sort(
-    (a, b) => b - a
+    (a, b) => getNumericYear(b) - getNumericYear(a)
   );
 
   const filteredSouls = souls.filter((s) => {
@@ -208,14 +261,22 @@ export default function SmaranikaPage() {
       <div className="max-w-5xl mx-auto py-8 px-4">
         
         {/* টপ বার */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-6">
           <Link href="/" className="inline-flex items-center text-amber-800 hover:text-amber-950 font-medium text-sm">
             ← হোমে ফিরে যান
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isAdmin ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={FORM_RESPONSES_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                >
+                  <span>📩</span> ফর্মের তথ্য দেখুন
+                </a>
                 <a
                   href={GOOGLE_SHEET_EDIT_URL}
                   target="_blank"
@@ -226,7 +287,7 @@ export default function SmaranikaPage() {
                 </a>
                 <button
                   onClick={handleAdminLogout}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
+                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full cursor-pointer"
                 >
                   লগআউট
                 </button>
@@ -234,7 +295,7 @@ export default function SmaranikaPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs text-amber-900 hover:text-amber-950 bg-amber-100/70 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition"
+                className="text-xs text-amber-900 hover:text-amber-950 bg-amber-100/70 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition cursor-pointer"
               >
                 🔒 অ্যাডমিন
               </button>
@@ -244,7 +305,7 @@ export default function SmaranikaPage() {
               onClick={fetchSmaranikaData}
               disabled={isLoading}
               title="নতুন তথ্য লোড করতে ক্লিক করুন"
-              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+              className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1 cursor-pointer"
             >
               <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
             </button>
@@ -262,8 +323,19 @@ export default function SmaranikaPage() {
           </p>
           <div className="mt-4 pt-3 border-t border-stone-700/60 max-w-lg mx-auto">
             <p className="text-stone-300 text-xs italic">
-              "ওঁ দিব্যান্ লোকান্ স গচ্ছতু — পরলোকগত সকল পূণ্য আত্মার চিরশান্তি কামনা করি।"
+              “ওঁ দিব্যান্ লোকান্ স গচ্ছতু — পরলোকগত সকল পূণ্য আত্মার চিরশান্তি কামনা করি।”
             </p>
+          </div>
+
+          <div className="mt-5">
+            <a
+              href={FORM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-amber-100 hover:bg-white text-stone-900 px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-md transition hover:scale-105"
+            >
+              <span>🕊️</span> স্মরণিকায় তথ্য যোগ করুন
+            </a>
           </div>
         </div>
 
@@ -276,7 +348,7 @@ export default function SmaranikaPage() {
               <span className="text-xs font-bold text-stone-600 mr-1 shrink-0">সাল:</span>
               <button
                 onClick={() => setSelectedYear('সব')}
-                className={`text-xs px-3 py-1.5 rounded-xl font-bold transition shrink-0 ${
+                className={`text-xs px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
                   selectedYear === 'সব'
                     ? 'bg-stone-800 text-amber-200 shadow-sm'
                     : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
@@ -288,7 +360,7 @@ export default function SmaranikaPage() {
                 <button
                   key={y}
                   onClick={() => setSelectedYear(y)}
-                  className={`text-xs px-3 py-1.5 rounded-xl font-bold transition shrink-0 ${
+                  className={`text-xs px-3 py-1.5 rounded-xl font-bold transition shrink-0 cursor-pointer ${
                     selectedYear === y
                       ? 'bg-stone-800 text-amber-200 shadow-sm'
                       : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
@@ -314,7 +386,7 @@ export default function SmaranikaPage() {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400 hover:text-stone-600 font-bold text-xs"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400 hover:text-stone-600 font-bold text-xs cursor-pointer"
                 >
                   ✕
                 </button>
@@ -342,9 +414,10 @@ export default function SmaranikaPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {filteredSouls.map((soul) => {
-              const isLit = litDiyas[soul.id] || false;
+              const isLit = litDiyas[soul.key] || litDiyas[soul.id] || false;
               const isAnniversary = isTodayAnniversary(soul.date, today);
               const yearsAgo = getYearsAgoLabel(soul.year, soul.date, today);
+              const showPhoto = soul.photoUrl && !failedPhotos[soul.key];
 
               return (
                 <div
@@ -373,15 +446,12 @@ export default function SmaranikaPage() {
                       title="বিস্তারিত দেখতে ছবিতে ক্লিক করুন"
                       className="w-20 h-20 mx-auto mb-3 rounded-full border-2 border-amber-400 p-1 flex items-center justify-center bg-stone-50 shadow-inner overflow-hidden relative cursor-pointer hover:scale-105 transition"
                     >
-                      {soul.photoUrl ? (
+                      {showPhoto ? (
                         <img
                           src={soul.photoUrl}
                           alt={soul.name}
                           className="w-full h-full object-cover rounded-full"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            e.currentTarget.parentElement.innerHTML = '<span class="text-3xl">🪔</span>';
-                          }}
+                          onError={() => setFailedPhotos((prev) => ({ ...prev, [soul.key]: true }))}
                         />
                       ) : (
                         <span className="text-3xl">🪔</span>
@@ -405,8 +475,8 @@ export default function SmaranikaPage() {
                   {/* প্রদীপ প্রজ্বলন বোতাম */}
                   <div className="mt-5 pt-3 border-t border-stone-100 flex flex-col items-center">
                     <button
-                      onClick={() => handleLightDiya(soul.id)}
-                      className={`text-xs px-4 py-2 rounded-full font-bold transition flex items-center gap-2 shadow-2xs ${
+                      onClick={() => handleLightDiya(soul)}
+                      className={`text-xs px-4 py-2 rounded-full font-bold transition flex items-center gap-2 shadow-2xs cursor-pointer ${
                         isLit
                           ? 'bg-amber-100 text-amber-900 border border-amber-300'
                           : 'bg-stone-100 hover:bg-amber-50 text-stone-700 border border-stone-200'
@@ -442,7 +512,7 @@ export default function SmaranikaPage() {
                 </h3>
                 <button
                   onClick={() => setSelectedSoul(null)}
-                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-sm flex items-center justify-center shrink-0 transition"
+                  className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-sm flex items-center justify-center shrink-0 transition cursor-pointer"
                 >
                   ✕
                 </button>
@@ -455,7 +525,7 @@ export default function SmaranikaPage() {
                   </p>
                 ) : (
                   <p className="text-xs sm:text-sm text-stone-600 italic text-center">
-                    "ওঁ দিব্যান্ লোকান্ স গচ্ছতু — তাঁর পুণ্য স্মৃতির প্রতি বিনম্র শ্রদ্ধাঞ্জলি।"
+                    “ওঁ দিব্যান্ লোকান্ স গচ্ছতু — তাঁর পুণ্য স্মৃতির প্রতি বিনম্র শ্রদ্ধাঞ্জলি।”
                   </p>
                 )}
               </div>
@@ -474,6 +544,7 @@ export default function SmaranikaPage() {
             <form onSubmit={handleAdminLogin}>
               <input
                 type="password"
+                inputMode="numeric"
                 placeholder="••••"
                 maxLength={4}
                 value={pinInput}
@@ -487,13 +558,13 @@ export default function SmaranikaPage() {
                 <button
                   type="button"
                   onClick={() => { setShowPinModal(false); setPinError(''); setPinInput(''); }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm bg-stone-800 hover:bg-stone-900 text-white font-medium rounded-lg"
+                  className="px-4 py-2 text-sm bg-stone-800 hover:bg-stone-900 text-white font-medium rounded-lg cursor-pointer"
                 >
                   প্রবেশ করুন
                 </button>

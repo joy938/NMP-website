@@ -4,6 +4,17 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
+const ADMIN_PIN = '0000';
+const EXPENSES_CSV_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/export?format=csv';
+const EXPENSES_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/edit?usp=sharing';
+const PRONAMI_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/export?format=csv';
+const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/export?format=csv';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzEWaVXLZQwBLZNgwlAomR67WB4kDUn86RrKN9C4kWgneDJIuzFwlW_lthOCxYdbBojzA/exec';
+
+const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
+const categoryPresets = ['প্রতিমা', 'পূজা সামগ্রী', 'প্রসাদ', 'বাদ্য', 'পুরোহিত', 'ডেকোরেশন', 'আলোকসজ্জা', 'বিবিধ'];
+const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
+
 const toNumber = (str) => {
   if (!str) return 0;
   const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
@@ -14,6 +25,9 @@ const toNumber = (str) => {
   return Number(en) || 0;
 };
 
+const normalizeBn = (str) =>
+  String(str || '').normalize('NFC').toLowerCase().trim();
+
 const normalizePuja = (str) =>
   String(str || '')
     .normalize('NFC')
@@ -22,17 +36,44 @@ const normalizePuja = (str) =>
     .trim()
     .toLowerCase();
 
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell.trim());
+    rows.push(row);
+  }
+  return rows;
+};
+
 export default function ExpensesPage() {
-  const ADMIN_PIN = '0000';
-
-  const EXPENSES_CSV_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/gviz/tq?tqx=out:csv';
-  const EXPENSES_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1g0RHelPy7pBIOncuU7UAOcXz9llWjiRoBZBybMblxg4/edit?usp=sharing';
-  const PRONAMI_CSV_URL = 'https://docs.google.com/spreadsheets/d/1JRNTuGcVo940s1-qNtI4lWwS8VzZ3XxpNtzPF1IBX2A/gviz/tq?tqx=out:csv';
-  const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
-
-  const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
-  const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
-
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,29 +83,45 @@ export default function ExpensesPage() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
+  // অ্যাডমিন ফর্ম স্টেট
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [titleInput, setTitleInput] = useState('');
+  const [categoryInput, setCategoryInput] = useState('পূজা সামগ্রী');
+  const [costInput, setCostInput] = useState('');
+  const [pujaInput, setPujaInput] = useState('কার্তিক পূজা');
+  const [yearInput, setYearInput] = useState(new Date().getFullYear());
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
   const [expenses, setExpenses] = useState([]);
   const [pronamiRecords, setPronamiRecords] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (syncUpcoming = false) => {
     setIsLoading(true);
     setIsError(false);
     try {
-      const [expRes, proRes, upcomingRes] = await Promise.all([
+      const requests = [
         fetch(`${EXPENSES_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`${PRONAMI_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
-        fetch(`${UPCOMING_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
-      ]);
+      ];
+      if (syncUpcoming) {
+        requests.push(fetch(`${UPCOMING_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null));
+      }
+
+      const [expRes, proRes, upcomingRes] = await Promise.all(requests);
+      if (!expRes.ok || !proRes.ok) {
+        throw new Error('Sheet fetch failed');
+      }
 
       let upcomingPujaName = '';
-      if (upcomingRes && upcomingRes.ok) {
+      if (syncUpcoming && upcomingRes && upcomingRes.ok) {
         const upText = await upcomingRes.text();
-        const upLines = upText.trim().split(/\r?\n/);
-        if (upLines.length >= 2) {
-          const upCols = upLines[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
-            v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-          );
+        const upRows = parseCSV(upText);
+        if (upRows.length >= 2) {
+          const upCols = upRows[1];
           if (upCols[0]) upcomingPujaName = upCols[0];
           const yearMatch = (upCols[2] || upCols[1] || '').match(/[০-৯\d]{4}/)?.[0];
           const convertedYear = toNumber(yearMatch);
@@ -73,18 +130,15 @@ export default function ExpensesPage() {
       }
 
       const expText = await expRes.text();
-      const expLines = expText.trim().split(/\r?\n/);
+      const expRows = parseCSV(expText);
       const parsedExpenses = [];
 
-      for (let i = 1; i < expLines.length; i++) {
-        const line = expLines[i];
-        if (!line.trim()) continue;
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
-          v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-        );
+      for (let i = 1; i < expRows.length; i++) {
+        const cols = expRows[i];
         if (cols.length >= 5 && cols[0]) {
           parsedExpenses.push({
             id: i,
+            rowIndex: i + 1,
             title: cols[0],
             category: cols[1] || 'বিবিধ',
             cost: toNumber(cols[2]),
@@ -96,15 +150,11 @@ export default function ExpensesPage() {
       setExpenses(parsedExpenses);
 
       const proText = await proRes.text();
-      const proLines = proText.trim().split(/\r?\n/);
+      const proRows = parseCSV(proText);
       const parsedPronami = [];
 
-      for (let i = 1; i < proLines.length; i++) {
-        const line = proLines[i];
-        if (!line.trim()) continue;
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
-          v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-        );
+      for (let i = 1; i < proRows.length; i++) {
+        const cols = proRows[i];
         if (cols.length >= 5 && cols[0]) {
           parsedPronami.push({
             puja: cols[1] || 'কার্তিক পূজা',
@@ -115,7 +165,7 @@ export default function ExpensesPage() {
       }
       setPronamiRecords(parsedPronami);
 
-      if (upcomingPujaName) {
+      if (syncUpcoming && upcomingPujaName) {
         const allPujas = Array.from(
           new Set([...defaultPujas, ...parsedExpenses.map((e) => e.puja).filter(Boolean)])
         );
@@ -134,18 +184,115 @@ export default function ExpensesPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
+    fetchData(true);
   }, []);
 
   const handleAdminLogin = (e) => {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
     } else {
       setPinError('ভুল পিন কোড!');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    setShowAddModal(false);
+    sessionStorage.removeItem('nmp_is_admin');
+  };
+
+  const openAddModal = () => {
+    setTitleInput('');
+    setCategoryInput('পূজা সামগ্রী');
+    setCostInput('');
+    setPujaInput(selectedPuja);
+    setYearInput(selectedYear);
+    setSubmitMessage('');
+    setShowAddModal(true);
+  };
+
+  const handleAddExpense = async (e) => {
+    e.preventDefault();
+    const cleanTitle = titleInput.trim();
+    const cleanCategory = categoryInput.trim() || 'বিবিধ';
+    const cleanCost = toNumber(costInput);
+
+    if (!cleanTitle || cleanCost <= 0) {
+      setSubmitMessage('সঠিক বিবরণ ও টাকার পরিমাণ লিখুন।');
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitMessage('');
+
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'add',
+          description: cleanTitle,
+          category: cleanCategory,
+          amount: cleanCost,
+          puja: pujaInput,
+          year: String(yearInput),
+        }),
+      });
+
+      setSubmitMessage('সফলভাবে সংরক্ষণ হয়েছে!');
+      setTimeout(() => {
+        setShowAddModal(false);
+        setSelectedPuja(pujaInput);
+        setSelectedYear(Number(yearInput));
+        fetchData(false);
+      }, 1200);
+    } catch (error) {
+      console.error('খরচ যোগ করতে সমস্যা হয়েছে:', error);
+      setSubmitMessage('সংরক্ষণ করতে সমস্যা হয়েছে, আবার চেষ্টা করুন।');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteExpense = async (item) => {
+    if (!isAdmin) return;
+    const confirmed = window.confirm(
+      `"${item.title}" (${item.cost} টাকা) — এই খরচটি কি মুছে ফেলতে চান?`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(item.id);
+    try {
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'delete',
+          rowIndex: item.rowIndex,
+          description: item.title,
+          puja: item.puja,
+          year: String(item.year),
+        }),
+      });
+
+      setTimeout(() => {
+        setDeletingId(null);
+        fetchData(false);
+      }, 1200);
+    } catch (error) {
+      console.error('খরচ মুছতে সমস্যা হয়েছে:', error);
+      setDeletingId(null);
+      alert('মুছে ফেলতে সমস্যা হয়েছে, আবার চেষ্টা করুন।');
     }
   };
 
@@ -169,13 +316,16 @@ export default function ExpensesPage() {
 
   const netBalance = totalIncome - totalExpense;
 
-  const filteredExpenses = currentExpenses.filter((item) =>
-    item.title.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-    item.category.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  const filteredExpenses = currentExpenses.filter(
+    (item) =>
+      normalizeBn(item.title).includes(normalizeBn(searchQuery)) ||
+      normalizeBn(item.category).includes(normalizeBn(searchQuery))
   );
 
+  const pujaHeading = selectedPuja === 'কীর্তন' ? 'কীর্তন-এর' : `${selectedPuja}র`;
+
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800 relative">
+    <main className="min-h-screen bg-gray-50 print:bg-transparent text-gray-800 relative">
       <div className="print:hidden">
         <Navbar />
       </div>
@@ -197,17 +347,23 @@ export default function ExpensesPage() {
             ← হোমে ফিরে যান
           </Link>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => window.print()}
               title="তালিকাটি প্রিন্ট বা PDF হিসেবে সেভ করুন"
-              className="text-[11px] sm:text-xs bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold transition flex items-center gap-1 shadow-2xs"
+              className="text-[11px] sm:text-xs bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold transition flex items-center gap-1 shadow-2xs cursor-pointer"
             >
               <span>🖨️</span> প্রিন্ট / PDF
             </button>
 
             {isAdmin ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  onClick={openAddModal}
+                  className="text-[11px] sm:text-xs bg-purple-700 hover:bg-purple-800 text-white px-2.5 sm:px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
+                >
+                  <span>+</span> নতুন খরচ
+                </button>
                 <a
                   href={EXPENSES_EDIT_URL}
                   target="_blank"
@@ -217,8 +373,8 @@ export default function ExpensesPage() {
                   <span>📊</span> শিট এডিট
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
-                  className="text-[11px] sm:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1.5 rounded-full"
+                  onClick={handleAdminLogout}
+                  className="text-[11px] sm:text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2.5 py-1.5 rounded-full cursor-pointer"
                 >
                   লগআউট
                 </button>
@@ -226,17 +382,17 @@ export default function ExpensesPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-[11px] sm:text-xs text-purple-700 hover:text-purple-900 bg-purple-50 border border-purple-200 px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold transition"
+                className="text-[11px] sm:text-xs text-purple-700 hover:text-purple-900 bg-purple-50 border border-purple-200 px-2.5 sm:px-3.5 py-1.5 rounded-full font-semibold transition cursor-pointer"
               >
                 🔒 অ্যাডমিন
               </button>
             )}
 
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(false)}
               disabled={isLoading}
               title="নতুন ডাটা লোড করতে ক্লিক করুন"
-              className="text-[11px] sm:text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-2.5 sm:px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+              className="text-[11px] sm:text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-2.5 sm:px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1 cursor-pointer"
             >
               <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? '...' : 'রিফ্রেশ'}
             </button>
@@ -266,12 +422,12 @@ export default function ExpensesPage() {
         </div>
 
         {/* মূল বক্স */}
-        <div className="bg-white/95 rounded-2xl shadow border border-gray-100 p-3 sm:p-5 md:p-6">
+        <div className="bg-white/95 print:bg-transparent rounded-2xl shadow print:shadow-none border border-gray-100 p-3 sm:p-5 md:p-6">
           
           {/* ফিল্টার */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-5 pb-4 border-b print:hidden">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-gray-800">📋 {selectedPuja}র হিসাব</h2>
+              <h2 className="text-base sm:text-lg font-bold text-gray-800">📋 {pujaHeading} হিসাব</h2>
               <p className="text-xs text-gray-500">
                 পূজা ও বছর পরিবর্তন করে আর্থিক বিবরণী দেখুন।
               </p>
@@ -311,14 +467,14 @@ export default function ExpensesPage() {
             
             <div className="bg-blue-50/90 border border-blue-200 rounded-xl p-2.5 sm:p-4 text-center">
               <span className="text-[10px] sm:text-xs text-blue-700 font-bold uppercase block">মোট আদায়</span>
-              <div className="text-base sm:text-2xl font-black text-blue-900 mt-0.5">
+              <div className="text-sm sm:text-2xl font-black text-blue-900 mt-0.5">
                 {totalIncome} ৳
               </div>
             </div>
 
             <div className="bg-red-50/90 border border-red-200 rounded-xl p-2.5 sm:p-4 text-center">
               <span className="text-[10px] sm:text-xs text-red-700 font-bold uppercase block">মোট খরচ</span>
-              <div className="text-base sm:text-2xl font-black text-red-900 mt-0.5">
+              <div className="text-sm sm:text-2xl font-black text-red-900 mt-0.5">
                 {totalExpense} ৳
               </div>
             </div>
@@ -333,7 +489,7 @@ export default function ExpensesPage() {
               }`}>
                 {netBalance >= 0 ? 'অবশিষ্ট জমা' : 'ঘাটতি'}
               </span>
-              <div className={`text-base sm:text-2xl font-black mt-0.5 ${
+              <div className={`text-sm sm:text-2xl font-black mt-0.5 ${
                 netBalance >= 0 ? 'text-green-800' : 'text-red-700'
               }`}>
                 {netBalance >= 0 ? `${netBalance} ৳` : `- ${Math.abs(netBalance)} ৳`}
@@ -365,7 +521,7 @@ export default function ExpensesPage() {
           </div>
 
           {/* টেবিল */}
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             {isLoading ? (
               <div className="py-12 text-center text-gray-500 text-sm flex flex-col items-center gap-2">
                 <Loader text="হিসাব লোড হচ্ছে..." />
@@ -382,12 +538,15 @@ export default function ExpensesPage() {
                     <th className="py-2.5 px-1.5 sm:px-3">খরচের বিবরণ / খাত</th>
                     <th className="py-2.5 px-1 sm:px-3 text-center">ক্যাটাগরি</th>
                     <th className="py-2.5 px-1.5 sm:px-3 text-right">খরচ</th>
+                    {isAdmin && (
+                      <th className="py-2.5 px-1 sm:px-2 text-center print:hidden w-10">মুছুন</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs sm:text-sm">
                   {filteredExpenses.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="py-8 text-center text-gray-400 text-sm">
+                      <td colSpan={isAdmin ? 5 : 4} className="py-8 text-center text-gray-400 text-sm">
                         {searchQuery
                           ? `"${searchQuery}" এর সাথে কোনো খরচের রেকর্ড মিলছে না।`
                           : `${selectedPuja} (${selectedYear}) তে গুগল শিটে কোনো খরচের এন্ট্রি নেই।`}
@@ -395,7 +554,7 @@ export default function ExpensesPage() {
                     </tr>
                   ) : (
                     filteredExpenses.map((item, index) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
+                      <tr key={item.id} className="even:bg-orange-100/50 hover:bg-orange-100 transition-colors">
                         <td className="py-2.5 px-1 sm:px-3 text-center text-gray-400 text-[11px] sm:text-xs">
                           {index + 1}
                         </td>
@@ -407,9 +566,21 @@ export default function ExpensesPage() {
                             {item.category}
                           </span>
                         </td>
-                        <td className="py-2.5 px-1.5 sm:px-3 text-right font-bold text-red-600">
+                        <td className="py-2.5 px-1.5 sm:px-3 text-right font-bold text-red-600 whitespace-nowrap">
                           {item.cost}
                         </td>
+                        {isAdmin && (
+                          <td className="py-2.5 px-1 sm:px-2 text-center print:hidden">
+                            <button
+                              onClick={() => handleDeleteExpense(item)}
+                              disabled={deletingId === item.id}
+                              title="খরচটি মুছে ফেলুন"
+                              className="p-1 rounded-lg text-red-600 hover:bg-red-100 transition cursor-pointer disabled:opacity-40"
+                            >
+                              {deletingId === item.id ? '⏳' : '🗑️'}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
@@ -431,6 +602,7 @@ export default function ExpensesPage() {
             <form onSubmit={handleAdminLogin}>
               <input
                 type="password"
+                inputMode="numeric"
                 placeholder="••••"
                 maxLength={4}
                 value={pinInput}
@@ -444,15 +616,129 @@ export default function ExpensesPage() {
                 <button
                   type="button"
                   onClick={() => { setShowPinModal(false); setPinError(''); setPinInput(''); }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-800 text-white font-medium rounded-lg"
+                  className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-800 text-white font-medium rounded-lg cursor-pointer"
                 >
                   প্রবেশ করুন
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* নতুন খরচ যোগ করার মডাল (শুধুমাত্র অ্যাডমিন) */}
+      {isAdmin && showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 print:hidden">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-purple-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-purple-900">নতুন পূজার খরচ যোগ করুন</h3>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-gray-400 hover:text-gray-600 font-bold text-lg cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddExpense} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">পূজা</label>
+                  <select
+                    value={pujaInput}
+                    onChange={(e) => setPujaInput(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm bg-gray-50 outline-none focus:border-purple-600"
+                  >
+                    {pujas.map((p, idx) => (
+                      <option key={idx} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">বছর</label>
+                  <select
+                    value={yearInput}
+                    onChange={(e) => setYearInput(Number(e.target.value))}
+                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm bg-gray-50 outline-none focus:border-purple-600"
+                  >
+                    {years.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">খরচের বিবরণ / খাত</label>
+                <input
+                  type="text"
+                  required
+                  value={titleInput}
+                  onChange={(e) => setTitleInput(e.target.value)}
+                  placeholder="যেমন: সাউন্ড, প্রতিমা, বাজার..."
+                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-purple-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">ক্যাটাগরি</label>
+                <input
+                  type="text"
+                  list="puja-expense-categories"
+                  required
+                  value={categoryInput}
+                  onChange={(e) => setCategoryInput(e.target.value)}
+                  placeholder="ক্যাটাগরি লিখুন বা বাছাই করুন..."
+                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-purple-600"
+                />
+                <datalist id="puja-expense-categories">
+                  {categoryPresets.map((cat) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">খরচ (টাকা)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  value={costInput}
+                  onChange={(e) => setCostInput(e.target.value)}
+                  placeholder="যেমন: 1500"
+                  className="w-full p-2.5 border border-gray-300 rounded-lg text-sm outline-none focus:border-purple-600"
+                />
+              </div>
+
+              {submitMessage && (
+                <p className={`text-xs font-semibold ${submitMessage.includes('সফল') ? 'text-green-600' : 'text-red-600'}`}>
+                  {submitMessage}
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg disabled:opacity-60 cursor-pointer"
+                >
+                  {submitting ? 'সংরক্ষণ হচ্ছে...' : 'সংরক্ষণ করুন'}
                 </button>
               </div>
             </form>

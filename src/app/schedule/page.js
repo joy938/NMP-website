@@ -4,6 +4,9 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
+const normalizeBn = (str) =>
+  String(str || '').normalize('NFC').toLowerCase().trim();
+
 const normalizePuja = (str) =>
   String(str || '')
     .normalize('NFC')
@@ -12,16 +15,64 @@ const normalizePuja = (str) =>
     .trim()
     .toLowerCase();
 
+const toBnDigits = (str) =>
+  String(str).replace(/\d/g, (d) => ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'][d]);
+
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell.trim());
+      if (row.some((c) => c !== '')) rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some((c) => c !== '')) rows.push(row);
+  }
+  return rows;
+};
+
 export default function SchedulePage() {
   const ADMIN_PIN = '0000';
 
   const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/gviz/tq?tqx=out:csv';
+  const YEARLY_SCHEDULE_CSV_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/gviz/tq?tqx=out:csv&gid=303533417';
   const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1SjJ-aX9FCOVaydDqCyOzZSK9OR5TbWpsAmKfjQ-ptxg/edit?usp=sharing';
   const UPCOMING_CSV_URL = 'https://docs.google.com/spreadsheets/d/1MfcYYDbAsRddIz5zszFvcT9EzIX-8QZ8KTs8doOyW1Q/gviz/tq?tqx=out:csv';
 
   const defaultPujas = ['কার্তিক পূজা', 'সরস্বতী পূজা', 'বাসন্তী পূজা', 'কীর্তন', 'শীতলা পূজা'];
   const [selectedPuja, setSelectedPuja] = useState('কার্তিক পূজা');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [showMantraModal, setShowMantraModal] = useState(false);
+  const [activeMantraKey, setActiveMantraKey] = useState('');
+  const [mantras, setMantras] = useState([]);
+
+  const [showYearlyModal, setShowYearlyModal] = useState(false);
+  const [yearlyDates, setYearlyDates] = useState([]);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -36,35 +87,57 @@ export default function SchedulePage() {
     setIsLoading(true);
     setIsError(false);
     try {
-      const [response, upcomingRes] = await Promise.all([
+      const [response, upcomingRes, yearlyRes] = await Promise.all([
         fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }),
         fetch(`${UPCOMING_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
+        fetch(`${YEARLY_SCHEDULE_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' }).catch(() => null),
       ]);
 
       let upcomingPujaName = '';
       if (upcomingRes && upcomingRes.ok) {
         const upText = await upcomingRes.text();
-        const upLines = upText.trim().split(/\r?\n/);
-        if (upLines.length >= 2) {
-          const upCols = upLines[1].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((v) =>
-            v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-          );
-          if (upCols[0]) upcomingPujaName = upCols[0];
+        const upRows = parseCSV(upText);
+        if (upRows.length >= 2 && upRows[1][0]) {
+          upcomingPujaName = upRows[1][0];
         }
       }
 
+      if (yearlyRes && yearlyRes.ok) {
+        const yrText = await yearlyRes.text();
+        const yrRows = parseCSV(yrText);
+        const parsedYearly = [];
+        const parsedMantras = [];
+
+        for (let i = 1; i < yrRows.length; i++) {
+          const cols = yrRows[i];
+          if (!cols[0]) continue;
+
+          parsedYearly.push({
+            id: i,
+            name: cols[0],
+            banglaDate: cols[1] || '',
+            englishDate: cols[2] || '',
+          });
+
+          if (cols[3] || cols[4]) {
+            parsedMantras.push({
+              key: cols[0],
+              label: cols[0],
+              pushpanjali: cols[3] || '',
+              pranam: cols[4] || '',
+            });
+          }
+        }
+        setYearlyDates(parsedYearly);
+        setMantras(parsedMantras);
+      }
+
       const csvText = await response.text();
-      const lines = csvText.trim().split(/\r?\n/);
+      const rows = parseCSV(csvText);
       const parsedSchedules = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-        );
-
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i];
         if (cols.length >= 4 && cols[0]) {
           parsedSchedules.push({
             id: i,
@@ -97,6 +170,9 @@ export default function SchedulePage() {
   };
 
   useEffect(() => {
+    if (sessionStorage.getItem('nmp_is_admin') === 'true') {
+      setIsAdmin(true);
+    }
     fetchScheduleData();
   }, []);
 
@@ -104,6 +180,7 @@ export default function SchedulePage() {
     e.preventDefault();
     if (pinInput === ADMIN_PIN) {
       setIsAdmin(true);
+      sessionStorage.setItem('nmp_is_admin', 'true');
       setShowPinModal(false);
       setPinInput('');
       setPinError('');
@@ -112,7 +189,30 @@ export default function SchedulePage() {
     }
   };
 
-  // গুগল শিটে নতুন কোনো পূজা যোগ করলে তা স্বয়ংক্রিয়ভাবে ট্যাবে আসবে
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('nmp_is_admin');
+  };
+
+  const openMantraModal = () => {
+    const matched = mantras.find(
+      (m) => normalizePuja(m.key) === normalizePuja(selectedPuja)
+    );
+    setActiveMantraKey(matched ? matched.key : mantras[0]?.key || '');
+    setShowMantraModal(true);
+  };
+
+  const activeMantra =
+    mantras.find((m) => m.key === activeMantraKey) || mantras[0] || null;
+
+  const detectedYear = yearlyDates
+    .map((y) => `${y.englishDate} ${y.banglaDate}`.match(/(20\d{2}|২০\d{2})/)?.[0])
+    .find(Boolean);
+
+  const yearlyTitle = detectedYear
+    ? `${toBnDigits(detectedYear)} পূজার সূচি`
+    : 'বাৎসরিক পূজার সূচি';
+
   const pujas = Array.from(
     new Set([...defaultPujas, ...schedules.map((s) => s.puja).filter(Boolean)])
   );
@@ -121,20 +221,21 @@ export default function SchedulePage() {
     (item) => normalizePuja(item.puja) === normalizePuja(selectedPuja)
   );
 
-  const filteredSchedules = currentPujaSchedules.filter((item) =>
-    item.event.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-    item.date.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-    item.time.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  const filteredSchedules = currentPujaSchedules.filter(
+    (item) =>
+      normalizeBn(item.event).includes(normalizeBn(searchQuery)) ||
+      normalizeBn(item.date).includes(normalizeBn(searchQuery)) ||
+      normalizeBn(item.time).includes(normalizeBn(searchQuery))
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
+    <main className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50/40 to-amber-50 text-gray-800">
       <Navbar />
 
       <div className="max-w-4xl mx-auto py-8 px-4">
         
         {/* টপ বার */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center gap-2 mb-6">
           <Link href="/" className="inline-flex items-center text-red-600 hover:text-red-800 font-medium text-sm">
             ← হোমে ফিরে যান
           </Link>
@@ -151,7 +252,7 @@ export default function SchedulePage() {
                   <span>📊</span> শিটে সময় এডিট করুন
                 </a>
                 <button
-                  onClick={() => setIsAdmin(false)}
+                  onClick={handleAdminLogout}
                   className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full"
                 >
                   লগআউট
@@ -177,29 +278,45 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* হেডার ব্যানার */}
-        <div className="bg-gradient-to-r from-red-700 to-amber-600 text-white p-6 rounded-2xl shadow-md mb-8">
-          <div className="flex items-center gap-2">
-            <span className="bg-white/20 text-yellow-100 text-xs px-2.5 py-1 rounded font-bold">পূজার নির্ঘণ্ট</span>
-            <span className="bg-green-500/80 text-white text-[11px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span> লাইভ গুগল শিট
+        {/* ২টি স্কয়ার বাটন বক্স (হালকা লাল ও সোনালী আভাসহ) */}
+        <div className="max-w-md sm:max-w-lg mx-auto grid grid-cols-2 gap-4 mb-8">
+          <button
+            type="button"
+            onClick={() => setShowYearlyModal(true)}
+            className="bg-gradient-to-br from-white via-red-50/50 to-red-100/60 border border-red-200 border-t-4 border-t-red-600 rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 active:scale-95 transition-all duration-200 p-4 sm:p-6 aspect-square flex flex-col items-center justify-center text-center cursor-pointer"
+          >
+            <span className="text-[11px] bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-md mb-2">
+              বাৎসরিক তালিকা
             </span>
-          </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold mt-2">পূজার সময়সূচী ও কার্যক্রম</h1>
-          <p className="text-red-100 text-sm mt-2">
-            গুগল শিট থেকে স্বয়ংক্রিয়ভাবে লাইভ সময়সূচী দেখানো হচ্ছে।
-          </p>
-        </div>
-
-        {/* বিশেষ নোটিশ বক্স */}
-        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm mb-8 flex items-start gap-3">
-          <span className="text-2xl">📢</span>
-          <div>
-            <h3 className="font-bold text-amber-900 text-sm">সাধারণ অবগতি ও অনুরোধ:</h3>
-            <p className="text-xs text-amber-800 mt-0.5">
-              সকল ভক্তবৃন্দ ও পাড়াবাসীকে যথাসময়ে উপস্থিত হয়ে পুষ্পাঞ্জলি প্রদান ও মহাপ্রসাদ গ্রহণ করার জন্য বিনীত অনুরোধ জানানো হচ্ছে।
+            <h3 className="text-sm sm:text-lg font-extrabold text-red-700 leading-snug">
+              {yearlyTitle}
+            </h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 mt-1.5 leading-relaxed">
+              সারা বছরের পূজার সম্ভাব্য তারিখ
             </p>
-          </div>
+            <span className="mt-3 text-xs font-bold text-red-600">
+              দেখুন →
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openMantraModal}
+            className="bg-gradient-to-br from-white via-amber-50/60 to-amber-100/70 border border-amber-200 border-t-4 border-t-amber-500 rounded-2xl shadow-md hover:shadow-xl hover:-translate-y-1 active:scale-95 transition-all duration-200 p-4 sm:p-6 aspect-square flex flex-col items-center justify-center text-center cursor-pointer"
+          >
+            <span className="text-[11px] bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-md mb-2">
+              পূজার মন্ত্র
+            </span>
+            <h3 className="text-sm sm:text-lg font-extrabold text-amber-700 leading-snug">
+              অঞ্জলি ও প্রণাম মন্ত্র
+            </h3>
+            <p className="text-[11px] sm:text-xs text-gray-500 mt-1.5 leading-relaxed">
+              সকল পূজার পুষ্পাঞ্জলি ও প্রণাম
+            </p>
+            <span className="mt-3 text-xs font-bold text-amber-600">
+              পড়ুন →
+            </span>
+          </button>
         </div>
 
         {/* পূজা সিলেক্ট করার ট্যাব */}
@@ -233,14 +350,14 @@ export default function SchedulePage() {
             </span>
           </div>
 
-          {/* 🔍 সার্চ বার */}
+          {/* সার্চ বার */}
           <div className="relative mb-5">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400 text-sm">
               🔍
             </span>
             <input
               type="text"
-              placeholder="কার্যক্রম বা সময় দিয়ে খুঁজুন (যেমন: অঞ্জলি, আরতি, সকাল)..."
+              placeholder="কার্যক্রম বা সময় দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -300,6 +417,138 @@ export default function SchedulePage() {
         </div>
 
       </div>
+
+      {/* বাৎসরিক পূজার সূচি মডাল */}
+      {showYearlyModal && (
+        <div
+          onClick={() => setShowYearlyModal(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-amber-200"
+          >
+            <div className="bg-gradient-to-r from-red-700 to-amber-600 text-white p-4 sm:p-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-extrabold">{yearlyTitle}</h3>
+                <p className="text-[11px] sm:text-xs text-amber-100">বাৎসরিক পূজা ও অনুষ্ঠানের আনুমানিক তারিখ</p>
+              </div>
+              <button
+                onClick={() => setShowYearlyModal(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              {yearlyDates.length === 0 ? (
+                <p className="text-center text-sm text-gray-500 py-6">
+                  তথ্য লোড হচ্ছে অথবা শিটে কোনো তথ্য নেই।
+                </p>
+              ) : (
+                <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                  {yearlyDates.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <h4 className="font-bold text-sm text-gray-900">{item.name}</h4>
+                        {item.banglaDate && (
+                          <p className="text-[11px] text-amber-800 font-medium mt-0.5">
+                            {item.banglaDate}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-xs font-bold text-red-700 bg-white border border-red-200 px-2.5 py-1 rounded-lg text-right shrink-0">
+                        {item.englishDate}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-4 text-[11px] text-gray-500 text-center">
+                পঞ্জিকা ও তিথি অনুযায়ী তারিখ পরিবর্তন হতে পারে।
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* পুষ্পাঞ্জলি ও প্রণাম মন্ত্র মডাল (গুগল শিট থেকে লোড হবে) */}
+      {showMantraModal && (
+        <div
+          onClick={() => setShowMantraModal(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-amber-200"
+          >
+            <div className="bg-gradient-to-r from-red-700 to-amber-600 text-white p-4 sm:p-5 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-extrabold">পুষ্পাঞ্জলি ও প্রণাম মন্ত্র</h3>
+                <p className="text-[11px] sm:text-xs text-amber-100">অঞ্জলি দেওয়ার সময় ফোনে দেখে পড়ুন</p>
+              </div>
+              <button
+                onClick={() => setShowMantraModal(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold text-sm flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              {!activeMantra ? (
+                <p className="text-center text-sm text-gray-500 py-6">
+                  শিটে এখনো কোনো মন্ত্র যুক্ত করা হয়নি।
+                </p>
+              ) : (
+                <>
+                  {/* পূজা বাছাই ট্যাব */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4">
+                    {mantras.map((m) => (
+                      <button
+                        key={m.key}
+                        onClick={() => setActiveMantraKey(m.key)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition ${
+                          activeMantraKey === m.key
+                            ? 'bg-red-700 text-white shadow-sm'
+                            : 'bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                    {activeMantra.pushpanjali && (
+                      <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5">
+                        <h4 className="text-xs font-bold text-red-700 mb-1.5">পুষ্পাঞ্জলি মন্ত্র:</h4>
+                        <p className="text-xs sm:text-sm text-gray-800 leading-relaxed whitespace-pre-line font-medium">
+                          {activeMantra.pushpanjali}
+                        </p>
+                      </div>
+                    )}
+
+                    {activeMantra.pranam && (
+                      <div className="bg-orange-50/70 border border-orange-200 rounded-2xl p-3.5">
+                        <h4 className="text-xs font-bold text-amber-800 mb-1.5">প্রণাম মন্ত্র:</h4>
+                        <p className="text-xs sm:text-sm text-gray-800 leading-relaxed whitespace-pre-line font-medium">
+                          {activeMantra.pranam}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* অ্যাডমিন পিন মডাল */}
       {showPinModal && (

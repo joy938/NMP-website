@@ -4,15 +4,77 @@ import Link from 'next/link';
 import Navbar from '../../components/Navbar';
 import Loader from '@/components/Loader';
 
+const ADMIN_PIN = '0000';
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/export?format=csv';
+const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/edit?usp=sharing';
+
+const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
+
+const normalizeBn = (str) =>
+  String(str || '').normalize('NFC').toLowerCase().trim();
+
+const toNumber = (str) => {
+  if (!str) return 0;
+  const bn = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+  const en = String(str)
+    .replace(/[০-৯]/g, (d) => bn.indexOf(d))
+    .replace(/,/g, '')
+    .trim();
+  return Number(en) || 0;
+};
+
+const normalizeMonth = (str) => {
+  const m = normalizeBn(str);
+  if (m === 'অগাস্ট' || m === 'আগস্ট') return 'আগস্ট';
+  if (m === 'জানুয়ারী' || m === 'জানুয়ারি') return 'জানুয়ারি';
+  if (m === 'ফেব্রুয়ারী' || m === 'ফেব্রুয়ারি') return 'ফেব্রুয়ারি';
+  return m;
+};
+
+const isPaidStatus = (status) => {
+  const s = normalizeBn(status);
+  return s === 'প' || s.includes('পরিশোধ') || s === '50' || s === '৫০';
+};
+
+const parseCSV = (text) => {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((ch === '\r' || ch === '\n') && !inQuotes) {
+      if (ch === '\r' && next === '\n') i++;
+      row.push(cell.trim());
+      if (row.some((c) => c !== '')) rows.push(row);
+      row = [];
+      cell = '';
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some((c) => c !== '')) rows.push(row);
+  }
+  return rows;
+};
+
 export default function SanghaPage() {
-  const ADMIN_PIN = '0000';
-  
-  const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/gviz/tq?tqx=out:csv';
-  const GOOGLE_SHEET_EDIT_URL = 'https://docs.google.com/spreadsheets/d/1FkY0Kq9EI7Xbepcjq9zlZGC2vqhANNAGFiz1MBxy0-4/edit?usp=sharing';
-
-  const months = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'অগাস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
-  const years = Array.from({ length: 26 }, (_, i) => 2025 + i);
-
   const currentMonthName = months[new Date().getMonth()];
   const currentYearNumber = new Date().getFullYear();
 
@@ -32,39 +94,37 @@ export default function SanghaPage() {
   const [selectedMember, setSelectedMember] = useState(null);
   const [dueCopied, setDueCopied] = useState(false);
 
-  const fetchGoogleSheetData = async () => {
-    setIsLoading(true);
+  const fetchGoogleSheetData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setIsError(false);
     try {
       const response = await fetch(`${GOOGLE_SHEET_CSV_URL}&t=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Sheet fetch failed');
       const csvText = await response.text();
 
-      const lines = csvText.trim().split(/\r?\n/);
+      const rows = parseCSV(csvText);
       const parsedRecords = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.trim()) continue;
-
-        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((val) =>
-          val.replace(/^"|"$/g, '').replace(/""/g, '"').trim()
-        );
-
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i];
         if (cols.length >= 4 && cols[0]) {
           parsedRecords.push({
             id: i,
             name: cols[0],
             month: cols[1] || currentMonthName,
-            year: Number(cols[2]) || currentYearNumber,
-            status: cols[3] || 'বকেয়া',
+            year: toNumber(cols[2]) || currentYearNumber,
+            status: cols[3] || 'ব',
           });
         }
       }
 
       setRecords(parsedRecords);
+      try {
+        localStorage.setItem('nmp_cache_sangha', JSON.stringify(parsedRecords));
+      } catch {}
     } catch (error) {
       console.error('গুগল শিট লোড করতে সমস্যা হয়েছে:', error);
-      setIsError(true);
+      if (!silent) setIsError(true);
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +134,21 @@ export default function SanghaPage() {
     if (sessionStorage.getItem('nmp_is_admin') === 'true') {
       setIsAdmin(true);
     }
-    fetchGoogleSheetData();
+
+    let hasCache = false;
+    try {
+      const cached = localStorage.getItem('nmp_cache_sangha');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRecords(parsed);
+          setIsLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    fetchGoogleSheetData(hasCache);
   }, []);
 
   const handleAdminLogin = (e) => {
@@ -96,18 +170,18 @@ export default function SanghaPage() {
   };
 
   const currentMonthRecords = records.filter(
-    (r) => r.month === selectedMonth && Number(r.year) === Number(selectedYear)
+    (r) => normalizeMonth(r.month) === normalizeMonth(selectedMonth) && Number(r.year) === Number(selectedYear)
   );
 
-  const paidCount = currentMonthRecords.filter((r) => r.status.includes('পরিশোধিত')).length;
+  const paidCount = currentMonthRecords.filter((r) => isPaidStatus(r.status)).length;
   const dueCount = currentMonthRecords.length - paidCount;
 
   const filteredRecords = currentMonthRecords.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+    normalizeBn(r.name).includes(normalizeBn(searchQuery))
   );
 
   const handleCopyDueList = async () => {
-    const dueMembers = currentMonthRecords.filter((r) => !r.status.includes('পরিশোধিত'));
+    const dueMembers = currentMonthRecords.filter((r) => !isPaidStatus(r.status));
     if (dueMembers.length === 0) {
       alert('এই মাসে কোনো বকেয়া নেই!');
       return;
@@ -134,12 +208,12 @@ export default function SanghaPage() {
         const found = records.find(
           (r) =>
             r.name === selectedMember &&
-            r.month === m &&
+            normalizeMonth(r.month) === normalizeMonth(m) &&
             Number(r.year) === Number(selectedYear)
         );
         return {
           month: m,
-          status: found ? (found.status.includes('পরিশোধিত') ? 'paid' : 'due') : 'none',
+          status: found ? (isPaidStatus(found.status) ? 'paid' : 'due') : 'none',
         };
       })
     : [];
@@ -169,7 +243,7 @@ export default function SanghaPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={handleCopyDueList}
-                  className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm"
+                  className="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-full font-bold transition flex items-center gap-1 shadow-sm cursor-pointer"
                 >
                   {dueCopied ? '✓ কপি হয়েছে!' : '📋 বকেয়া কপি'}
                 </button>
@@ -183,7 +257,7 @@ export default function SanghaPage() {
                 </a>
                 <button
                   onClick={handleAdminLogout}
-                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full font-medium"
+                  className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-1.5 rounded-full font-medium cursor-pointer"
                 >
                   লগআউট
                 </button>
@@ -191,17 +265,17 @@ export default function SanghaPage() {
             ) : (
               <button
                 onClick={() => setShowPinModal(true)}
-                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition"
+                className="text-xs text-red-700 hover:text-red-900 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition cursor-pointer"
               >
                 🔒 অ্যাডমিন
               </button>
             )}
 
             <button
-              onClick={fetchGoogleSheetData}
+              onClick={() => fetchGoogleSheetData(false)}
               disabled={isLoading}
               title="নতুন ডাটা লোড করতে ক্লিক করুন"
-              className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1"
+              className="text-xs bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3 py-1.5 rounded-full font-semibold transition flex items-center gap-1 cursor-pointer"
             >
               <span className={isLoading ? 'animate-spin' : ''}>🔄</span> {isLoading ? 'লোড...' : 'রিফ্রেশ'}
             </button>
@@ -288,7 +362,7 @@ export default function SanghaPage() {
             </span>
             <input
               type="text"
-              placeholder="সদস্যের নাম দিয়ে খুঁজুন (যেমন: প্রদ্যুত, রাসেল, অনিক)..."
+              placeholder="সদস্যের নাম দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 text-xs md:text-sm border border-gray-300 rounded-xl outline-none focus:border-red-600 bg-gray-50 focus:bg-white transition"
@@ -296,7 +370,7 @@ export default function SanghaPage() {
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 font-bold cursor-pointer"
                 title="সার্চ ক্লিয়ার করুন"
               >
                 ✕
@@ -333,11 +407,11 @@ export default function SanghaPage() {
                     </tr>
                   ) : (
                     filteredRecords.map((member, index) => {
-                      const isPaid = member.status.includes('পরিশোধিত');
+                      const isPaid = isPaidStatus(member.status);
 
                       return (
                         <tr
-                          key={index}
+                          key={member.id}
                           onClick={() => setSelectedMember(member.name)}
                           className="even:bg-orange-100/50 hover:bg-orange-100 transition-colors cursor-pointer"
                         >
@@ -383,7 +457,7 @@ export default function SanghaPage() {
               </div>
               <button
                 onClick={() => setSelectedMember(null)}
-                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold text-xs flex items-center justify-center cursor-pointer"
               >
                 ✕
               </button>
@@ -426,6 +500,7 @@ export default function SanghaPage() {
             <form onSubmit={handleAdminLogin}>
               <input
                 type="password"
+                inputMode="numeric"
                 placeholder="••••"
                 maxLength={4}
                 value={pinInput}
@@ -439,13 +514,13 @@ export default function SanghaPage() {
                 <button
                   type="button"
                   onClick={() => { setShowPinModal(false); setPinError(''); setPinInput(''); }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   বাতিল
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg"
+                  className="px-4 py-2 text-sm bg-red-700 hover:bg-red-800 text-white font-medium rounded-lg cursor-pointer"
                 >
                   প্রবেশ করুন
                 </button>
